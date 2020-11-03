@@ -1,0 +1,68 @@
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Pane?>
+
+<?import javafx.scene.control.MenuBar?>
+<?import javafx.scene.control.Menu?>
+<?import javafx.scene.control.MenuItem?>
+
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.ScrollBar?>
+<VBox fx:controller="com.geekbrains.cloud.client.Controller" xmlns:fx="http://javafx.com/fxml">
+    <MenuBar>
+        <Menu text="Опции">
+            <MenuItem text="Обновить" onAction="#getFolderTreeStructure"/>
+        </Menu>
+    </MenuBar>
+
+    <HBox VBox.vgrow="ALWAYS">
+        <VBox fx:id="fileBox" HBox.hgrow="ALWAYS">
+            <Label VBox.vgrow="ALWAYS">Удаленное хранилище</Label>
+
+            <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
+
+            <ScrollPane fx:id="remoteTreeScroll" VBox.vgrow="ALWAYS" vbarPolicy="AS_NEEDED" hbarPolicy="AS_NEEDED"/>
+
+            <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
+
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Имя файла: </Label>
+                <Label fx:id="remoteFileName" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Размер, KB: </Label>
+                <Label fx:id="remoteFileSize" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Время создания: </Label>
+                <Label fx:id="remoteFileCreationTime" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+        </VBox>
+
+        <Pane prefWidth="1" style="-fx-background-color: black;"/>
+
+        <VBox HBox.hgrow="ALWAYS">
+            <Label VBox.vgrow="ALWAYS">Локальное хранилище</Label>
+
+            <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
+
+            <Pane fx:id="localTreePane" VBox.vgrow="ALWAYS"></Pane>
+
+            <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
+
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Имя файла: </Label>
+                <Label fx:id="localFileName" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Размер, KB: </Label>
+                <Label fx:id="localFileSize" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Время создания: </Label>
+                <Label fx:id="localFileCreationTime" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+        </VBox>
+    </HBox>
+</VBox>
