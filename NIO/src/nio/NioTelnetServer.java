@@ -61,13 +61,13 @@ public class NioTelnetServer {
     }
 
     // TODO: 30.10.2020
-    //  ls - список файлов (сделано на уроке),
-    //  cd (name) - перейти в папку
-    //  touch (name) создать текстовый файл с именем
-    //  mkdir (name) создать директорию
-    //  rm (name) удалить файл по имени
+    //  ls - список файлов (сделано на уроке),                          +
+    //  cd (name) - перейти в папку                                     +
+    //  touch (name) создать текстовый файл с именем                    +
+    //  mkdir (name) создать директорию                                 +
+    //  rm (name) удалить файл по имени                                 +
     //  copy (src, target) скопировать файл из одного пути в другой
-    //  cat (name) - вывести в консоль содержимое файла
+    //  cat (name) - вывести в консоль содержимое файла                 +
 
     private void handleRead(SelectionKey key) throws IOException {
         SocketChannel channel = (SocketChannel) key.channel();
@@ -173,25 +173,21 @@ public class NioTelnetServer {
         }
     }
 
-    // TODO: 30.10.2020
-    //  ls - список файлов (сделано на уроке),                          +
-    //  cd (name) - перейти в папку                                     +
-    //  touch (name) создать текстовый файл с именем                    +
-    //  mkdir (name) создать директорию                                 +
-    //  rm (name) удалить файл по имени                                 +
-    //  copy (src, target) скопировать файл из одного пути в другой
-    //  cat (name) - вывести в консоль содержимое файла                 +
-
     private String checkCommandArgument(String command, SocketChannel channel) throws IOException {
         String argsPart = command.split(" ", 2)[1];
 
-//        Pattern pattern = Pattern.compile("([\\w/] ?)|(\"[\\w/ ]\" ?)");
-        Pattern pattern = Pattern.compile(" ?([\\w/_.!]+)|(\"[\\w/_.! ]+\") ?");
-        Matcher matcher = pattern.matcher(argsPart);
-        System.out.println(matcher.matches());
-        System.out.println(matcher.start());
+//        Pattern pattern = Pattern.compile(" ?([\\w/_.!]+)|(\"[\\w/_.! ]+\") ?");
+//        Matcher matcher = pattern.matcher(argsPart);
+//        matcher.matches();
+//        matcher.start();
 
-        return null;
+        if (argsPart.contains(" ") && !(argsPart.startsWith("\"") && argsPart.endsWith("\""))) {
+            channel.write(ByteBuffer.wrap("Invalid arguments\n\r".getBytes()));
+        } else if (argsPart.startsWith("\"") && argsPart.endsWith("\"")) {
+            return argsPart.substring(1, argsPart.length() - 1);
+        }
+
+        return argsPart;
     }
 
     private void sendMessage(String message, Selector selector) throws IOException {
