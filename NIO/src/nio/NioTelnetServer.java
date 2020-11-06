@@ -61,13 +61,13 @@ public class NioTelnetServer {
     }
 
     // TODO: 30.10.2020
-    //  ls - список файлов (сделано на уроке),                          +
-    //  cd (name) - перейти в папку                                     +
-    //  touch (name) создать текстовый файл с именем                    +
-    //  mkdir (name) создать директорию                                 +
-    //  rm (name) удалить файл по имени                                 +
+    //  ls - список файлов (сделано на уроке),
+    //  cd (name) - перейти в папку
+    //  touch (name) создать текстовый файл с именем
+    //  mkdir (name) создать директорию
+    //  rm (name) удалить файл по имени
     //  copy (src, target) скопировать файл из одного пути в другой
-    //  cat (name) - вывести в консоль содержимое файла                 +
+    //  cat (name) - вывести в консоль содержимое файла
 
     private void handleRead(SelectionKey key) throws IOException {
         SocketChannel channel = (SocketChannel) key.channel();
@@ -169,9 +169,30 @@ public class NioTelnetServer {
                 else channel.write(ByteBuffer.wrap("file does not exist\n\r".getBytes()));
             }
         } else if (command.startsWith("copy ")) {
+            String[] strPath = checkCommandArguments(command, channel);
 
+            if (strPath != null && strPath.length == 2) {
+                Path src = rootPath.resolve(Paths.get(strPath[0]));
+                Path dst = rootPath.resolve(Paths.get(strPath[1]));
+
+                if (Files.exists(src)) Files.copy(src, dst);
+                else channel.write(ByteBuffer.wrap("file does not exist\n\r".getBytes()));
+            }
         }
     }
+
+    private String[] checkCommandArguments(String command, SocketChannel channel) {
+        return null;
+    }
+
+    // TODO: 30.10.2020
+    //  ls - список файлов (сделано на уроке),                          +
+    //  cd (name) - перейти в папку                                     +
+    //  touch (name) создать текстовый файл с именем                    +
+    //  mkdir (name) создать директорию                                 +
+    //  rm (name) удалить файл по имени                                 +
+    //  copy (src, target) скопировать файл из одного пути в другой
+    //  cat (name) - вывести в консоль содержимое файла                 +
 
     private String checkCommandArgument(String command, SocketChannel channel) throws IOException {
         String argsPart = command.split(" ", 2)[1];
