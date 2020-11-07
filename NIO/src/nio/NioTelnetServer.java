@@ -26,6 +26,10 @@ public class NioTelnetServer {
 
     private Path rootPath = Paths.get("").toRealPath();
 
+    public static void main(String[] args) throws IOException {
+        new NioTelnetServer();
+    }
+
     public NioTelnetServer() throws IOException {
         ServerSocketChannel server = ServerSocketChannel.open();
 
@@ -60,14 +64,14 @@ public class NioTelnetServer {
         }
     }
 
-    // TODO: 30.10.2020
-    //  ls - список файлов (сделано на уроке),
-    //  cd (name) - перейти в папку
-    //  touch (name) создать текстовый файл с именем
-    //  mkdir (name) создать директорию
-    //  rm (name) удалить файл по имени
-    //  copy (src, target) скопировать файл из одного пути в другой
-    //  cat (name) - вывести в консоль содержимое файла
+    // TODO: 30.10.2020                                                 +
+    //  ls - список файлов (сделано на уроке),                          +
+    //  cd (name) - перейти в папку                                     +
+    //  touch (name) создать текстовый файл с именем                    +
+    //  mkdir (name) создать директорию                                 +
+    //  rm (name) удалить файл по имени                                 +
+    //  copy (src, target) скопировать файл из одного пути в другой     +
+    //  cat (name) - вывести в консоль содержимое файла                 +
 
     private void handleRead(SelectionKey key) throws IOException {
         SocketChannel channel = (SocketChannel) key.channel();
@@ -75,11 +79,9 @@ public class NioTelnetServer {
         int read = channel.read(buffer);
 
         if (read == -1) {
-            System.out.println(-1);
             channel.close();
             return;
         } else if (read == 0) {
-            System.out.println(0);
             return;
         }
 
@@ -94,7 +96,6 @@ public class NioTelnetServer {
         String command = new String(buf, StandardCharsets.UTF_8)
                 .replace("\n", "")
                 .replace("\r", "");
-        System.out.println(command);
 
         if (command.equals("--help")) {
             channel.write(ByteBuffer.wrap("input ls for show file list\n\r".getBytes()));
@@ -102,19 +103,19 @@ public class NioTelnetServer {
             channel.write(ByteBuffer.wrap("input touch <name> for create file\n\r".getBytes()));
             channel.write(ByteBuffer.wrap("input mkdir <name> for crete directory\n\r".getBytes()));
             channel.write(ByteBuffer.wrap("input rm <name> for delete file\n\r".getBytes()));
-            channel.write(ByteBuffer.wrap("input copy <src> <dst> for delete file\n\r".getBytes()));
+            channel.write(ByteBuffer.wrap("input copy <src> <dst> for copy file from <src> to <dst>\n\r".getBytes()));
             channel.write(ByteBuffer.wrap("input cat <name> for delete file\n\r".getBytes()));
         } else if (command.equals("ls")) {
             channel.write(ByteBuffer.wrap((getFilesList() + "\n\r").getBytes()));
         } else if (command.startsWith("cd ")) {
-            String strPath = checkCommandArgument(command, channel);
+            List<String> strPath = getCommandArguments(command);
 
-            if (strPath != null) {
+            if (strPath.size() == 1) {
                 Path targetPath;
 
-                if (strPath.equals(".")) targetPath = rootPath;
-                else if (strPath.equals("..")) targetPath = rootPath.getParent();
-                else targetPath = rootPath.resolve(Paths.get(strPath)).toRealPath();
+                if (strPath.get(0).equals(".")) targetPath = rootPath;
+                else if (strPath.get(0).equals("..")) targetPath = rootPath.getParent();
+                else targetPath = rootPath.resolve(Paths.get(strPath.get(0))).toRealPath();
 
                 if (Files.isDirectory(targetPath)) {
                     rootPath = targetPath;
@@ -124,37 +125,37 @@ public class NioTelnetServer {
                 }
             }
         } else if (command.startsWith("touch ")) {
-            String strPath = checkCommandArgument(command, channel);
+            List<String> strPath = getCommandArguments(command);
 
-            if (strPath != null) {
-                Path target = rootPath.resolve(Paths.get(strPath));
+            if (strPath.size() == 1) {
+                Path target = rootPath.resolve(Paths.get(strPath.get(0)));
 
                 if (Files.notExists(target)) Files.createFile(target);
                 else channel.write(ByteBuffer.wrap("File already exist\n\r".getBytes()));
             }
         } else if (command.startsWith("mkdir ")) {
-            String strPath = checkCommandArgument(command, channel);
+            List<String> strPath = getCommandArguments(command);
 
-            if (strPath != null) {
-                Path target = rootPath.resolve(Paths.get(strPath));
+            if (strPath.size() == 1) {
+                Path target = rootPath.resolve(Paths.get(strPath.get(0)));
 
                 if (Files.notExists(target)) Files.createDirectory(target);
                 else channel.write(ByteBuffer.wrap("Folder already exist\n\r".getBytes()));
             }
         } else if (command.startsWith("rm ")) {
-            String strPath = checkCommandArgument(command, channel);
+            List<String> strPath = getCommandArguments(command);
 
-            if (strPath != null) {
-                Path target = rootPath.resolve(Paths.get(strPath));
+            if (strPath.size() == 1) {
+                Path target = rootPath.resolve(Paths.get(strPath.get(0)));
 
                 if (Files.exists(target)) Files.delete(target);
                 else channel.write(ByteBuffer.wrap("File does not exist\n\r".getBytes()));
             }
         } else if (command.startsWith("cat ")) {
-            String strPath = checkCommandArgument(command, channel);
+            List<String> strPath = getCommandArguments(command);
 
-            if (strPath != null) {
-                Path target = rootPath.resolve(Paths.get(strPath));
+            if (strPath.size() == 1) {
+                Path target = rootPath.resolve(Paths.get(strPath.get(0)));
 
                 if (Files.exists(target)) {
                    Files.readAllLines(target, StandardCharsets.UTF_8)
@@ -165,59 +166,40 @@ public class NioTelnetServer {
                                    e.printStackTrace();
                                }
                            });
-                }
-                else channel.write(ByteBuffer.wrap("file does not exist\n\r".getBytes()));
+                } else channel.write(ByteBuffer.wrap("File does not exist\n\r".getBytes()));
             }
         } else if (command.startsWith("copy ")) {
-            String[] strPath = checkCommandArguments(command, channel);
+            List<String> strPath = getCommandArguments(command);
 
-            if (strPath != null && strPath.length == 2) {
-                Path src = rootPath.resolve(Paths.get(strPath[0]));
-                Path dst = rootPath.resolve(Paths.get(strPath[1]));
+            if (strPath.size() == 2) {
+                Path src = rootPath.resolve(Paths.get(strPath.get(0)));
+                Path dst = rootPath.resolve(Paths.get(strPath.get(1)));
 
                 if (Files.exists(src)) Files.copy(src, dst);
-                else channel.write(ByteBuffer.wrap("file does not exist\n\r".getBytes()));
+                else channel.write(ByteBuffer.wrap("Source file does not exist\n\r".getBytes()));
             }
         }
     }
 
-    private String[] checkCommandArguments(String command, SocketChannel channel) {
-        return null;
-    }
-
-    // TODO: 30.10.2020
-    //  ls - список файлов (сделано на уроке),                          +
-    //  cd (name) - перейти в папку                                     +
-    //  touch (name) создать текстовый файл с именем                    +
-    //  mkdir (name) создать директорию                                 +
-    //  rm (name) удалить файл по имени                                 +
-    //  copy (src, target) скопировать файл из одного пути в другой
-    //  cat (name) - вывести в консоль содержимое файла                 +
-
-    private String checkCommandArgument(String command, SocketChannel channel) throws IOException {
+    private List<String> getCommandArguments(String command) {
         String argsPart = command.split(" ", 2)[1];
 
-//        Pattern pattern = Pattern.compile(" ?([\\w/_.!]+)|(\"[\\w/_.! ]+\") ?");
-//        Matcher matcher = pattern.matcher(argsPart);
-//        matcher.matches();
-//        matcher.start();
+        String regEx = "([^\\\\:*?<>|\" ]+)|\"([^\\\\:*?<>|\"]+)\"";
+        Matcher matcher = Pattern.compile(regEx).matcher(argsPart);
 
-        if (argsPart.contains(" ") && !(argsPart.startsWith("\"") && argsPart.endsWith("\""))) {
-            channel.write(ByteBuffer.wrap("Invalid arguments\n\r".getBytes()));
-        } else if (argsPart.startsWith("\"") && argsPart.endsWith("\"")) {
-            return argsPart.substring(1, argsPart.length() - 1);
+        List<String> args = new ArrayList<>();
+
+        int start, end;
+        while (matcher.find()) {
+            int sPos = matcher.start(), ePos = matcher.end() - 1;
+
+            start = argsPart.charAt(sPos) == '"' ? sPos + 1 : sPos;
+            end = argsPart.charAt(ePos) == '"' ? ePos - 1 : ePos;
+
+            args.add(argsPart.substring(start, end + 1));
         }
 
-        return argsPart;
-    }
-
-    private void sendMessage(String message, Selector selector) throws IOException {
-        for (SelectionKey key : selector.keys()) {
-            if (key.isValid() && key.channel() instanceof SocketChannel) {
-                ((SocketChannel)key.channel())
-                        .write(ByteBuffer.wrap(message.getBytes()));
-            }
-        }
+        return args;
     }
 
     @SuppressWarnings("unckeked")
@@ -233,9 +215,5 @@ public class NioTelnetServer {
         channel.register(selector, SelectionKey.OP_READ, "LOL");
 
         channel.write(ByteBuffer.wrap("Enter --help\n\r".getBytes()));
-    }
-
-    public static void main(String[] args) throws IOException {
-        new NioTelnetServer();
     }
 }
