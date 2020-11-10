@@ -9,6 +9,9 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.bytes.ByteArrayDecoder;
 import io.netty.handler.codec.bytes.ByteArrayEncoder;
 
+import java.nio.file.Path;
+import java.util.Arrays;
+
 public class ClientNetwork {
 
     //    private static final String HOST = "192.168.23.59";
@@ -38,9 +41,7 @@ public class ClientNetwork {
                             }
                         });
                 ChannelFuture future = b.connect(HOST, PORT).sync();
-
-                getFolderTreeStructure();
-
+                getRemoteFolderTreeStructure();
                 future.channel().closeFuture().sync();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -51,16 +52,39 @@ public class ClientNetwork {
         t.start();
     }
 
-    public ClientCloud getClientCloud() {
-        return clientCloud;
-    }
-
-    public void getFolderTreeStructure() {
-        channel.writeAndFlush(new byte[] {3});
-    }
-
     public void close() {
         channel.close();
     }
 
+    public ClientCloud getClientCloud() {
+        return clientCloud;
+    }
+
+    public void getRemoteFolderTreeStructure() {
+        channel.writeAndFlush(new byte[] {3});
+    }
+
+    public void requestDownloadFile(FileDescription selectedObject, int lvl) {
+        Path target = ClientCloud.getFullPath(clientCloud.getRemoteTreeStructure(), selectedObject, lvl);
+        byte[] m = getDownloadMsg(target);
+        System.out.println(Arrays.toString(m));
+        channel.writeAndFlush(m);
+    }
+
+    public void requestUploadFile(FileDescription selectedObject, int lvl) {
+        channel.writeAndFlush(new byte[] {3});
+    }
+
+    private byte[] getDownloadMsg(Path target) {
+        byte[] downloadFlag = new byte[] {4};
+        byte[] targetPathBytes = target.toString().getBytes();
+
+        return Utils.concatAll(downloadFlag, targetPathBytes);
+    }
+
+    private byte[] getUploadMsg(Path target) {
+        byte[] downloadFlag = new byte[] {4};
+        byte[] targetPathBytes = target.toString().getBytes();
+        return Utils.concatAll(downloadFlag, targetPathBytes);
+    }
 }

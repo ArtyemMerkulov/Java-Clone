@@ -1,6 +1,7 @@
 package com.geekbrains.cloud.client;
 
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.InvalidParameterException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -11,6 +12,7 @@ public class FilesTree {
 
     public FilesTree() {
         filesTree = new ArrayList<>(1);
+        filesTree.add(new ArrayList<>(1));
         filesTree.add(new ArrayList<>(1));
         filesTree.get(0).add(new FileDescription("root", Type.FOLDER, -1));
     }
@@ -41,6 +43,12 @@ public class FilesTree {
                 if (tmpSet.add(fd)) filesTree.get(i + 1).add(fd);
             }
         }
+
+//        for (int i = 0; i < filesTree.size(); i++) {
+//            for (int j = 0; j < filesTree.get(i).size(); j++) {
+//                System.out.println(i + " " + j + " " + filesTree.get(i).get(j));
+//            }
+//        }
     }
 
     public List<FileDescription> getFilesList(String folderName, int folderLvl) {
@@ -73,10 +81,32 @@ public class FilesTree {
     }
 
     public FileDescription getFolder(String folderName, int folderLvl) {
-        for (FileDescription fileDescription : filesTree.get(folderLvl + 1))
+        for (FileDescription fileDescription : filesTree.get(folderLvl))
             if (fileDescription.getType() == Type.FOLDER && fileDescription.getName().equals(folderName))
                 return fileDescription;
 
         return null;
+    }
+
+    public FileDescription getElement(int lvl, int link) {
+        return filesTree.get(lvl).get(link);
+    }
+
+    public Path getPath(FileDescription file, int lvl) {
+        String[] pathParts = new String[lvl + 1];
+
+        int currLink = file.getLink();
+        pathParts[lvl] = file.getName();
+
+        for (int i = lvl; i > 0; i--) {
+            FileDescription tmpFd = filesTree.get(i).get(currLink);
+            pathParts[i - 1] = tmpFd.getName() + "/";
+            currLink = tmpFd.getLink();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (String pathPart : pathParts) sb.append(pathPart);
+
+        return Paths.get(sb.toString());
     }
 }
