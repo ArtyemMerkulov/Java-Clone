@@ -14,7 +14,7 @@ public class FileDescription {
     public FileDescription() {
         this.name = "root";
         this.type = Type.FOLDER;
-        this.link = -255;
+        this.link = -1;
     }
 
     public FileDescription(String name, Type type, int link) {
@@ -24,6 +24,12 @@ public class FileDescription {
         this.name = name;
         this.type = type;
         this.link = link;
+    }
+
+    public FileDescription(FileDescription other) {
+        this.name = other.getName();
+        this.type = other.getType();
+        this.link = other.getLink();
     }
 
     public String getName() {

@@ -13,9 +13,13 @@ public class Main extends Application {
         FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource("/client.fxml"));
         Parent root = fxmlLoader.load();
         Controller controller = fxmlLoader.getController();
-        primaryStage.setScene(new Scene(root, 400, 400));
+        primaryStage.setScene(new Scene(root, 550, 500));
         primaryStage.setTitle("Geek Cloud Client");
         primaryStage.setOnCloseRequest(event -> controller.exitAction());
+        primaryStage.setOnShowing(event -> {
+            controller.getRemoteFolderTreeStructure();
+            controller.getLocalFolderTreeStructure();
+        });
         primaryStage.show();
     }
 

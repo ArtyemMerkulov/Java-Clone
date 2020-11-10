@@ -9,15 +9,16 @@
 
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.ScrollBar?>
+<?import javafx.scene.control.Button?>
 <VBox fx:controller="com.geekbrains.cloud.client.Controller" xmlns:fx="http://javafx.com/fxml">
-    <MenuBar>
-        <Menu text="Опции">
-            <MenuItem text="Обновить" onAction="#getFolderTreeStructure"/>
-        </Menu>
-    </MenuBar>
+<!--    <MenuBar>-->
+<!--        <Menu text="Опции">-->
+<!--            <MenuItem text="Обновить" onAction="#getRemoteFolderTreeStructure"/>-->
+<!--        </Menu>-->
+<!--    </MenuBar>-->
 
     <HBox VBox.vgrow="ALWAYS">
-        <VBox fx:id="fileBox" HBox.hgrow="ALWAYS">
+        <VBox HBox.hgrow="ALWAYS" prefWidth="200">
             <Label VBox.vgrow="ALWAYS">Удаленное хранилище</Label>
 
             <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
@@ -42,12 +43,19 @@
 
         <Pane prefWidth="1" style="-fx-background-color: black;"/>
 
-        <VBox HBox.hgrow="ALWAYS">
+        <VBox HBox.hgrow="ALWAYS" alignment="CENTER" prefWidth="100">
+            <Button fx:id="download" onAction="#downloadFile" text="Download" prefWidth="75" VBox.vgrow="ALWAYS"></Button>
+            <Button fx:id="upload" onAction="#uploadFile" text="Upload" prefWidth="75" VBox.vgrow="ALWAYS"></Button>
+        </VBox>
+
+        <Pane prefWidth="1" style="-fx-background-color: black;"/>
+
+        <VBox HBox.hgrow="ALWAYS" prefWidth="200">
             <Label VBox.vgrow="ALWAYS">Локальное хранилище</Label>
 
             <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
 
-            <Pane fx:id="localTreePane" VBox.vgrow="ALWAYS"></Pane>
+            <ScrollPane fx:id="localTreeScroll" VBox.vgrow="ALWAYS" vbarPolicy="AS_NEEDED" hbarPolicy="AS_NEEDED"/>
 
             <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
 

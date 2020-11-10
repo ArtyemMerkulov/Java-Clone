@@ -6,8 +6,13 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
+import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -16,6 +21,8 @@ import java.util.stream.Collectors;
 public class ServerMainHandler extends ChannelInboundHandlerAdapter {
 
     private static final List<Channel> channels = new ArrayList<>();
+
+    private static int BUF_SIZE = 10240;
 
     private static int newClientIndex = 1;
 
@@ -28,7 +35,7 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
         System.out.println("Handler added");
-        tmpBuf = ctx.alloc().buffer();
+        tmpBuf = ctx.alloc().buffer(10240);
     }
 
     @Override
@@ -55,14 +62,52 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
         tmpBuf.writeBytes((byte[]) msg);
 
         if (tmpBuf.isReadable()) {
-            if (getCommand(tmpBuf) == 3) {
-                // Высылаем сведения о строении хранилища
+            if (getCommand(tmpBuf) == Command.REQUEST_CLOUD_TREE_STRUCTURE.getValue()) {
                 List<String> folderTreeStructure = serverCloud.getFolderTreeStructure()
                         .stream().map(Path::toString).collect(Collectors.toList());
-                folderTreeStructure.forEach(System.out::println);
-                sendMsg(ctx, getMsgBytesFromListString(folderTreeStructure, new byte[] {3}));
+
+                sendMsg(ctx, getMsgBytesFromListString(folderTreeStructure,
+                        new byte[] {Command.REQUEST_CLOUD_TREE_STRUCTURE.getValue()}));
+
+                tmpBuf.clear();
+            } else if (getCommand(tmpBuf) == Command.REQUEST_DOWNLOAD_FILE.getValue()) {
+                Path filePath = ServerCloud.getCloudPath().resolve(getFilePath(tmpBuf));
+                tmpBuf.clear();
+
+                if (Files.exists(filePath)) {
+                    try(final FileChannel channel = new FileInputStream(filePath.toString()).getChannel()) {
+                        MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+                        long bytesRead = 0, fileSize = channel.size();
+
+                        while (bytesRead < fileSize) {
+                            System.out.println("bytesRead: " + bytesRead + " fileSize: " + fileSize);
+                            int bufSize = (int) ((fileSize - bytesRead) % BUF_SIZE);
+                            byte[] downloadMsg = new byte[2 + (bufSize > 0 ? bufSize : BUF_SIZE)];
+
+                            bytesRead += downloadMsg.length - 2;
+
+                            downloadMsg[0] = 4;
+                            downloadMsg[1] = (byte) (fileSize - bytesRead > 0 ? 1 : 2);
+
+                            System.out.println("!: " + buffer.remaining());
+                            System.out.println("!: " + (downloadMsg.length - 2));
+                            buffer.get(downloadMsg, 2, downloadMsg.length - 2);
+                            System.out.println("!: " + downloadMsg[0] + " " + downloadMsg[1]);
+
+                            sendMsg(ctx, downloadMsg);
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private Path getFilePath(ByteBuf tmpBuf) {
+        byte[] filePathBytes = new byte[tmpBuf.readableBytes() - 1];
+
+        tmpBuf.getBytes(1, filePathBytes);
+
+        return Paths.get(new String(filePathBytes));
     }
 
     @Override
@@ -76,7 +121,6 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
         System.out.println("Клиент " + clientName + " отвалился");
         closeChannel(ctx);
         cause.printStackTrace();
-
     }
 
     private void closeChannel(ChannelHandlerContext ctx) {
