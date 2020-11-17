@@ -43,7 +43,7 @@
 
         <Pane prefWidth="1" style="-fx-background-color: black;"/>
 
-        <VBox HBox.hgrow="ALWAYS" alignment="CENTER" prefWidth="100">
+        <VBox alignment="CENTER" prefWidth="100">
             <Button fx:id="download" onAction="#downloadFile" text="Download" prefWidth="75" VBox.vgrow="ALWAYS"></Button>
             <Button fx:id="upload" onAction="#uploadFile" text="Upload" prefWidth="75" VBox.vgrow="ALWAYS"></Button>
         </VBox>

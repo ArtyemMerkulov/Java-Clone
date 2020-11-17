@@ -1,71 +1,134 @@
 package com.geekbrains.cloud.client;
 
+import com.geekbrains.cloud.FileDescription;
+import com.geekbrains.cloud.Type;
+import com.sun.istack.internal.NotNull;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
 import java.util.stream.Collectors;
 
 public class ClientCloud {
 
-    private static final Path localCloudPath = Paths.get("C:\\Users\\surga\\OneDrive\\Рабочий стол\\Уроки\\Разработка сетевого хранилища на Java\\");
+    private static final FileDescription localCloudRoot = new FileDescription(Paths.get("C:\\Users\\surga\\OneDrive\\Рабочий стол\\Уроки\\Разработка сетевого хранилища на Java\\"), Type.DIRECTORY);
 
-    private FilesTree remoteTree;
-    private FilesTree localTree;
+    private static final FileDescription remoteCloudRoot = new FileDescription(Paths.get(""), Type.DIRECTORY);
 
-    private boolean start = false;
+    private FileDescription actionFile;
 
-    private Path actionFilePath;
+    private FileDescription currentLocalDirectory;
+
+    private FileDescription currentRemoteDirectory;
+
+    private List<FileDescription> currentLocalDirectoryFiles;
+
+    private List<FileDescription> currentRemoteDirectoryFiles;
+
+    private boolean start;
 
     private boolean fileReceived;
 
+    private volatile boolean isDirectoryStructureReceived;
+
     public ClientCloud() {
-        remoteTree = new FilesTree();
+        start = false;
+        fileReceived = false;
+        isDirectoryStructureReceived = false;
+        actionFile = remoteCloudRoot;
+        changeCurrentLocalDirectory(localCloudRoot);
+        changeCurrentRemoteDirectory(remoteCloudRoot, new ArrayList<>());
+    }
+
+    @NotNull
+    public FileDescription getCurrentLocalDirectory() {
+        return currentLocalDirectory;
+    }
+
+    public void setCurrentLocalDirectory(@NotNull FileDescription currentLocalDirectory) {
+        this.currentLocalDirectory = currentLocalDirectory;
+    }
+
+    @NotNull
+    public FileDescription getCurrentRemoteDirectory() {
+        return currentRemoteDirectory;
+    }
+
+    public void setCurrentRemoteDirectory(@NotNull FileDescription currentRemoteDirectory) {
+        this.currentRemoteDirectory = currentRemoteDirectory;
+    }
+
+    public ClientCloud changeCurrentLocalDirectory(@NotNull FileDescription newRootDirectory) {
+        currentLocalDirectory = new FileDescription(newRootDirectory);
         try {
-            localTree = new FilesTree(initLocalFolderTreeStructure(localCloudPath));
+            currentLocalDirectoryFiles = getFilesOnPath(currentLocalDirectory.getPath());
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        return this;
     }
 
-    public Path getActionFilePath() {
-        return actionFilePath;
+    public ClientCloud changeCurrentRemoteDirectory(@NotNull FileDescription newRootDirectory,
+                                                    List<FileDescription> remotePathFiles) {
+        currentRemoteDirectory = new FileDescription(newRootDirectory);
+        currentRemoteDirectoryFiles = remotePathFiles;
+
+        return this;
     }
 
-    private List<Path> initLocalFolderTreeStructure(Path path) throws IOException {
-        return Files.walk(path)
-                .filter(Files::isRegularFile)
+    @NotNull
+    private List<FileDescription> getFilesOnPath(@NotNull Path path) throws IOException {
+        if (!Files.isDirectory(path))
+            throw new IllegalArgumentException("File in this path is not a directory.");
+        return Files.walk(path, 1)
                 .map(path::relativize)
+                .skip(1)
+                .map(p -> new FileDescription(p, Files.isDirectory(Paths.get(currentLocalDirectory.getPath()
+                        .toString(), p.toString())) ? Type.DIRECTORY : Type.FILE))
                 .collect(Collectors.toList());
     }
 
-    public FilesTree getLocalTreeStructure() {
-        return localTree;
+    @NotNull
+    public List<FileDescription> getCurrentLocalDirectoryFiles() {
+        return currentLocalDirectoryFiles;
     }
 
-    public void setLocalTreeStructure(List<Path> localPathsList) {
-        localTree = new FilesTree(localPathsList);
+    @NotNull
+    public List<FileDescription> getCurrentRemoteDirectoryFiles() {
+        return currentRemoteDirectoryFiles;
     }
 
-    public void setRemoteTreeStructure(List<Path> remotePathsList) {
-        remoteTree = new FilesTree(remotePathsList);
+    @NotNull
+    public static FileDescription getLocalCloudRoot() {
+        return localCloudRoot;
     }
 
-    public FilesTree getRemoteTreeStructure() {
-        return remoteTree;
+    @NotNull
+    public static FileDescription getRemoteCloudRoot() {
+        return remoteCloudRoot;
     }
 
-    public void setStart(boolean start) {
-        this.start = start;
+    @NotNull
+    public FileDescription getActionFilePath() {
+        return actionFile;
     }
 
+    public void setActionFilePath(FileDescription actionFile) {
+        this.actionFile = new FileDescription(actionFile);
+    }
+
+    @NotNull
     public boolean getStart() {
         return start;
     }
 
-    public static Path getFullPath(FilesTree filesTree, FileDescription file, int lvl) {
-        return filesTree.getPath(file, lvl);
+    public void setStart(boolean start) {
+        this.start = start;
     }
 
     public void setFileReceived(boolean fileReceived) {
@@ -76,11 +139,11 @@ public class ClientCloud {
         return fileReceived;
     }
 
-    public void setActionFilePath(Path path) {
-        actionFilePath = path;
+    public void setDirectoryStructureReceived(boolean isDirectoryStructureReceived) {
+        this.isDirectoryStructureReceived = isDirectoryStructureReceived;
     }
 
-    public static Path getLocalCloudPath() {
-        return localCloudPath;
+    public boolean isDirectoryStructureReceived() {
+        return isDirectoryStructureReceived;
     }
 }

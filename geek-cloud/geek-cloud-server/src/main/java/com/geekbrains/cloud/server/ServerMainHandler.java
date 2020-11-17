@@ -1,20 +1,28 @@
 package com.geekbrains.cloud.server;
 
+import com.geekbrains.cloud.Command;
+import com.geekbrains.cloud.FileDescription;
+import com.geekbrains.cloud.Type;
+import com.geekbrains.cloud.Utils;
+import com.google.common.primitives.Bytes;
+import com.sun.istack.internal.NotNull;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
-import java.io.*;
-import java.nio.ByteBuffer;
+import java.io.FileInputStream;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,7 +30,7 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
 
     private static final List<Channel> channels = new ArrayList<>();
 
-    private static int BUF_SIZE = 10240;
+    private static final int BUF_SIZE = 52428800; // 50 MB
 
     private static int newClientIndex = 1;
 
@@ -33,20 +41,20 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
     private ByteBuf tmpBuf;
 
     @Override
-    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+    public void handlerAdded(ChannelHandlerContext ctx) {
         System.out.println("Handler added");
-        tmpBuf = ctx.alloc().buffer(10240);
+        tmpBuf = ctx.alloc().buffer(BUF_SIZE);
     }
 
     @Override
-    public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
+    public void handlerRemoved(ChannelHandlerContext ctx) {
         System.out.println("Handler removed");
         tmpBuf.release();
         tmpBuf = null;
     }
 
     @Override
-    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+    public void channelActive(ChannelHandlerContext ctx) {
         channels.add(ctx.channel());
 
         clientName = "Клиент #" + newClientIndex;
@@ -59,47 +67,69 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        tmpBuf.writeBytes((byte[]) msg);
+        tmpBuf.writeBytes((ByteBuf) msg);
 
-        if (tmpBuf.isReadable()) {
-            if (getCommand(tmpBuf) == Command.REQUEST_CLOUD_TREE_STRUCTURE.getValue()) {
-                List<String> folderTreeStructure = serverCloud.getFolderTreeStructure()
-                        .stream().map(Path::toString).collect(Collectors.toList());
+        if (tmpBuf.isReadable() && getCommandValue(tmpBuf) <= Command.maxValue()) {
+            // Got a request command
+            switch (Command.getCommandByValue(getCommandValue(tmpBuf))) {
+                // Handling a client request for a directory structure
+                case REQUEST_CLOUD_TREE_STRUCTURE:
+                    // Extract request path and make file description
+                    Path currDirectoryPath = getRequestCurrentDirectory(tmpBuf);
+                    FileDescription currDirectory = new FileDescription(currDirectoryPath, Type.DIRECTORY);
+                    // Got a list of files contained in this path
+                    System.out.println("RECEIVE: " + currDirectory);
+                    List<FileDescription> directoryTreeStructure = serverCloud.changeCurrentDirectoryTreeStructure(currDirectory)
+                            .getCurrentDirectoryTreeStructure();
+                    // Generated a byte array with a response
+                    directoryTreeStructure.forEach(System.out::println);
+                    byte[] responseMsg = getMsgBytesFromFilesList(directoryTreeStructure,
+                            Command.REQUEST_CLOUD_TREE_STRUCTURE);
+                    sendMsg(ctx, responseMsg);
+                    // Clear buffer
+                    tmpBuf.clear();
+                    break;
+                // Processing a client's file download request
+                case REQUEST_DOWNLOAD_FILE:
+                    Path filePath = ServerCloud.getCloudRootPath().resolve(getFilePath(tmpBuf));
 
-                sendMsg(ctx, getMsgBytesFromListString(folderTreeStructure,
-                        new byte[] {Command.REQUEST_CLOUD_TREE_STRUCTURE.getValue()}));
+                    tmpBuf.clear();
 
-                tmpBuf.clear();
-            } else if (getCommand(tmpBuf) == Command.REQUEST_DOWNLOAD_FILE.getValue()) {
-                Path filePath = ServerCloud.getCloudPath().resolve(getFilePath(tmpBuf));
-                tmpBuf.clear();
+                    if (Files.exists(filePath)) {
+                        try(final FileChannel channel = new FileInputStream(filePath.toString()).getChannel()) {
+                            MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 0,
+                                    channel.size());
+                            long bytesRead = 0, fileSize = channel.size();
 
-                if (Files.exists(filePath)) {
-                    try(final FileChannel channel = new FileInputStream(filePath.toString()).getChannel()) {
-                        MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
-                        long bytesRead = 0, fileSize = channel.size();
+                            while (bytesRead < fileSize) {
+                                int bufSize = (int) ((fileSize - bytesRead) % BUF_SIZE);
+                                byte[] downloadMsg = new byte[2 + (bufSize > 0 ? bufSize : BUF_SIZE)];
 
-                        while (bytesRead < fileSize) {
-                            System.out.println("bytesRead: " + bytesRead + " fileSize: " + fileSize);
-                            int bufSize = (int) ((fileSize - bytesRead) % BUF_SIZE);
-                            byte[] downloadMsg = new byte[2 + (bufSize > 0 ? bufSize : BUF_SIZE)];
+                                bytesRead += downloadMsg.length - 2;
 
-                            bytesRead += downloadMsg.length - 2;
+                                downloadMsg[0] = Command.REQUEST_DOWNLOAD_FILE.getValue();
+                                downloadMsg[1] = (byte) (fileSize - bytesRead > 0 ? 1 : 2);
 
-                            downloadMsg[0] = 4;
-                            downloadMsg[1] = (byte) (fileSize - bytesRead > 0 ? 1 : 2);
+                                buffer.get(downloadMsg, 2, downloadMsg.length - 2);
 
-                            System.out.println("!: " + buffer.remaining());
-                            System.out.println("!: " + (downloadMsg.length - 2));
-                            buffer.get(downloadMsg, 2, downloadMsg.length - 2);
-                            System.out.println("!: " + downloadMsg[0] + " " + downloadMsg[1]);
-
-                            sendMsg(ctx, downloadMsg);
+                                sendMsg(ctx, downloadMsg);
+                            }
                         }
                     }
-                }
+
+                    break;
             }
         }
+    }
+
+    private Path getRequestCurrentDirectory(ByteBuf tmpBuf) {
+        int len = tmpBuf.getInt(1);
+        byte[] stringPathBytes = new byte[len];
+
+        tmpBuf.skipBytes(5);
+        tmpBuf.readBytes(stringPathBytes);
+
+        return Paths.get(new String(stringPathBytes, StandardCharsets.UTF_8));
     }
 
     private Path getFilePath(ByteBuf tmpBuf) {
@@ -111,73 +141,50 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+    public void channelInactive(ChannelHandlerContext ctx) {
         System.out.println("Клиент " + clientName + " вышел из сети");
         closeChannel(ctx);
     }
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         System.out.println("Клиент " + clientName + " отвалился");
         closeChannel(ctx);
         cause.printStackTrace();
     }
 
-    private void closeChannel(ChannelHandlerContext ctx) {
-        channels.remove(ctx.channel());
-        ctx.close();
-    }
+    private byte[] getMsgBytesFromFilesList(List<FileDescription> filesList, Command command) {
+        List<byte[]> msgBytesParts = new ArrayList<>();
 
-    private byte[] getMsgBytesFromListString(List<String> stringList, byte[] commandBytes) {
-        int intSize = 4, listOffset = 2, commandLen = commandBytes.length + intSize;
-        List<ByteBuf> byteBuffers = new ArrayList<>();
+        msgBytesParts.add(new byte[] {command.getValue()});
+        for (int i = 0; i < filesList.size(); i++) {
+            byte[] strBytes = filesList.get(i).getPath().toString().getBytes();
+            byte[] typeBytes = new byte[] {filesList.get(i).getType().getValue()};
+            byte[] sizeBytes = Utils.intToByteArray(strBytes.length);
 
-        byteBuffers.add(ByteBufAllocator.DEFAULT.buffer().writeBytes(commandBytes));
-        byteBuffers.add(ByteBufAllocator.DEFAULT.buffer().capacity(intSize));
+            byte[] msgBytesPart = Utils.concatAll(sizeBytes, typeBytes, strBytes);
 
-        for (int i = listOffset; i < stringList.size() + listOffset; i++) {
-            byte[] tmp = stringList.get(i - listOffset).getBytes();
-
-            byteBuffers.add(ByteBufAllocator.DEFAULT.buffer().capacity(tmp.length + intSize));
-
-            byteBuffers.get(i).writeInt(tmp.length);
-            byteBuffers.get(i).writeBytes(tmp);
-
-            commandLen += tmp.length + intSize;
+            msgBytesParts.add(msgBytesPart);
         }
-        byteBuffers.get(1).writeInt(commandLen);
 
-        ByteBuf msgByteBuf = concat(byteBuffers);
-
-        byte[] msgBytes = new byte[msgByteBuf.readableBytes()];
-        msgByteBuf.readBytes(msgBytes);
-
-        releaseByteBufList(byteBuffers);
-
-        return msgBytes;
+        return Bytes.toArray(
+                msgBytesParts.stream()
+                        .map(Bytes::asList)
+                        .flatMap(Collection::stream)
+                        .collect(Collectors.toList())
+        );
     }
 
-    private void releaseByteBufList(List<ByteBuf> list) {
-        for (ByteBuf byteBuf : list) byteBuf.release();
-    }
-
-    private ByteBuf concat(List<ByteBuf> buffers) {
-        int length = 0;
-
-        for (ByteBuf bb : buffers) length += bb.readableBytes();
-
-        ByteBuf bbNew = ByteBufAllocator.DEFAULT.buffer().capacity(length);
-
-        for (ByteBuf bb : buffers) bbNew.writeBytes(bb);
-
-        return bbNew;
-    }
-
-    private byte getCommand(ByteBuf byteBuf) {
+    private byte getCommandValue(ByteBuf byteBuf) {
         return byteBuf.getByte(0);
     }
 
     private void sendMsg(ChannelHandlerContext ctx, byte[] msg) {
-        ctx.channel().writeAndFlush(msg);
+        ctx.channel().writeAndFlush(Unpooled.wrappedBuffer(msg));
+    }
+
+    private void closeChannel(ChannelHandlerContext ctx) {
+        channels.remove(ctx.channel());
+        ctx.close();
     }
 }

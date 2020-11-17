@@ -31,13 +31,14 @@ public class Server {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline().addLast(
-                                    new ByteArrayEncoder(),
-                                    new ByteArrayDecoder(),
                                     new ServerMainHandler()
                             );
                         }
                     });
             ChannelFuture future = b.bind(HOST, PORT).sync();
+
+            System.out.println("Server running...");
+
             future.channel().closeFuture().sync();
         } catch (Exception e) {
             e.printStackTrace();
