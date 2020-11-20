@@ -5,7 +5,6 @@ import com.geekbrains.cloud.FileDescription;
 import com.geekbrains.cloud.Type;
 import com.sun.istack.internal.NotNull;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
@@ -16,12 +15,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class ClientMainHandler extends ChannelInboundHandlerAdapter {
 
-    private static final int BUF_SIZE = 52428800; // 50 MB
+    private static final int BUF_SIZE = 131071;
 
     private ChannelHandlerContext ctx;
 
@@ -36,18 +34,18 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         System.out.println("Handler added");
+
         this.ctx = ctx;
         tmpBuf = ctx.alloc().buffer(BUF_SIZE);
+
         clientCloud.setStart(true);
     }
 
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) {
         System.out.println("Handler removed");
-        tmpBuf.release();
-        tmpBuf = null;
+        clearBuffer();
     }
-
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         tmpBuf.writeBytes((ByteBuf) msg);
@@ -55,16 +53,23 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
         switch (Command.getCommandByValue(getCommandValue(tmpBuf))) {
             case REQUEST_CLOUD_TREE_STRUCTURE:
                 List<FileDescription> remoteFilesList = getFilesDescriptionsFromRequest();
-                clientCloud.changeCurrentRemoteDirectory(clientCloud.getActionFilePath(), remoteFilesList);
 
-                clearBuffer(tmpBuf);
+                clientCloud.changeCurrentRemoteDirectory(clientCloud.getActionFile(), remoteFilesList);
                 clientCloud.setDirectoryStructureReceived(true);
+
                 break;
-            case REQUEST_DOWNLOAD_FILE:
+            case RECEIVE_PART_OF_DOWNLOAD_FILE:
+                writeFilePart(clientCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
+                break;
+            case RECEIVE_END_PART_OF_DOWNLOAD_FILE:
+                writeFilePart(clientCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
+                clientCloud.setFileReceived(true);
                 break;
         }
+
+        resetBuffer();
 
 //        if (getCommand(tmpBuf) == 3 && tmpBuf.writerIndex() == getCommandLen(tmpBuf)) {
 //            List<Path> remotePathsList = getPathsFromFolderTreeBytes(5);
@@ -89,7 +94,7 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
     }
 
 //    private void write() throws IOException {
-//        Path fileName = clientCloud.getActionFilePath();
+//        Path fileName = clientCloud.getActionFile();
 //
 //        if (!Files.exists(fileName)) writeFilePart(fileName, StandardOpenOption.CREATE);
 //        else writeFilePart(fileName, StandardOpenOption.APPEND);
@@ -97,10 +102,17 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
 //        clearBuffer(tmpBuf);
 //    }
 
-    private void writeFilePart(Path filePath, StandardOpenOption... option) throws IOException {
+    private void writeFilePart(FileDescription file, StandardOpenOption... option) {
+        tmpBuf.skipBytes(1);
+
         byte[] buf = new byte[tmpBuf.readableBytes()];
-        tmpBuf.getBytes(0, buf);
-        Files.write(filePath, buf, option);
+        tmpBuf.readBytes(buf);
+
+        try {
+            Files.write(clientCloud.getCurrentLocalDirectory().getPath().resolve(file.getFileName()), buf, option);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @NotNull
@@ -132,18 +144,14 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
         return command.getByte(0);
     }
 
-    @NotNull
-    private int getCommandLen(@NotNull ByteBuf tmpBuf) {
-        return tmpBuf.getInt(1);
+    private void resetBuffer() {
+        clearBuffer();
+        tmpBuf = ctx.alloc().buffer(BUF_SIZE);
     }
 
-    private void clearBuffer(@NotNull ByteBuf buf) {
-        buf.clear();
-        buf.capacity(BUF_SIZE);
-    }
-
-    @NotNull
-    public ChannelHandlerContext getCtx() {
-        return ctx;
+    private void clearBuffer() {
+        tmpBuf.clear();
+        tmpBuf.release();
+        tmpBuf = null;
     }
 }

@@ -5,32 +5,25 @@ import com.geekbrains.cloud.FileDescription;
 import com.geekbrains.cloud.Type;
 import com.geekbrains.cloud.Utils;
 import com.google.common.primitives.Bytes;
-import com.sun.istack.internal.NotNull;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.*;
 
-import java.io.FileInputStream;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
+import java.nio.file.StandardOpenOption;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class ServerMainHandler extends ChannelInboundHandlerAdapter {
 
     private static final List<Channel> channels = new ArrayList<>();
 
-    private static final int BUF_SIZE = 52428800; // 50 MB
+    private static final int BUF_SIZE = 131070;
 
     private static int newClientIndex = 1;
 
@@ -78,13 +71,10 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
                     Path currDirectoryPath = getRequestCurrentDirectory(tmpBuf);
                     FileDescription currDirectory = new FileDescription(currDirectoryPath, Type.DIRECTORY);
                     // Got a list of files contained in this path
-                    System.out.println("RECEIVE: " + currDirectory);
                     List<FileDescription> directoryTreeStructure = serverCloud.changeCurrentDirectoryTreeStructure(currDirectory)
                             .getCurrentDirectoryTreeStructure();
                     // Generated a byte array with a response
-                    directoryTreeStructure.forEach(System.out::println);
-                    byte[] responseMsg = getMsgBytesFromFilesList(directoryTreeStructure,
-                            Command.REQUEST_CLOUD_TREE_STRUCTURE);
+                    ByteBuf responseMsg = getMsgBytesFromFilesList(directoryTreeStructure, Command.REQUEST_CLOUD_TREE_STRUCTURE);
                     sendMsg(ctx, responseMsg);
                     // Clear buffer
                     tmpBuf.clear();
@@ -96,23 +86,31 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
                     tmpBuf.clear();
 
                     if (Files.exists(filePath)) {
-                        try(final FileChannel channel = new FileInputStream(filePath.toString()).getChannel()) {
-                            MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 0,
-                                    channel.size());
+                        try(FileChannel channel = (FileChannel) Files.newByteChannel(filePath, EnumSet.of(StandardOpenOption.READ))) {
+                            MappedByteBuffer buffer;
+                            ByteBuf unpooled;
                             long bytesRead = 0, fileSize = channel.size();
 
-                            while (bytesRead < fileSize) {
-                                int bufSize = (int) ((fileSize - bytesRead) % BUF_SIZE);
-                                byte[] downloadMsg = new byte[2 + (bufSize > 0 ? bufSize : BUF_SIZE)];
+                            while(bytesRead < fileSize) {
+                                long bytesLeft = fileSize - bytesRead;
+                                int bufSize = bytesLeft / BUF_SIZE > 0 ? BUF_SIZE : (int) bytesLeft;
+                                System.out.println("bytesLeft: " + bytesLeft);
+                                System.out.println("bufSize: " + bufSize);
 
-                                bytesRead += downloadMsg.length - 2;
+                                buffer = channel.map(FileChannel.MapMode.READ_ONLY, bytesRead, bufSize);
+                                unpooled = Unpooled.buffer(bufSize + 1);
 
-                                downloadMsg[0] = Command.REQUEST_DOWNLOAD_FILE.getValue();
-                                downloadMsg[1] = (byte) (fileSize - bytesRead > 0 ? 1 : 2);
+                                bytesRead += bufSize;
 
-                                buffer.get(downloadMsg, 2, downloadMsg.length - 2);
+                                unpooled.setByte(0, (bufSize == BUF_SIZE ? Command.RECEIVE_PART_OF_DOWNLOAD_FILE.getValue() :
+                                        Command.RECEIVE_END_PART_OF_DOWNLOAD_FILE.getValue()));
+                                unpooled.writerIndex(1);
+                                unpooled.writeBytes(buffer);
 
-                                sendMsg(ctx, downloadMsg);
+                                sendMsg(ctx, unpooled);
+
+                                buffer.clear();
+                                clearBuffer(unpooled);
                             }
                         }
                     }
@@ -120,6 +118,10 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
                     break;
             }
         }
+    }
+
+    private void clearBuffer(ByteBuf buf) {
+        buf.clear();
     }
 
     private Path getRequestCurrentDirectory(ByteBuf tmpBuf) {
@@ -153,13 +155,13 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
         cause.printStackTrace();
     }
 
-    private byte[] getMsgBytesFromFilesList(List<FileDescription> filesList, Command command) {
+    private ByteBuf getMsgBytesFromFilesList(List<FileDescription> filesList, Command command) {
         List<byte[]> msgBytesParts = new ArrayList<>();
 
         msgBytesParts.add(new byte[] {command.getValue()});
-        for (int i = 0; i < filesList.size(); i++) {
-            byte[] strBytes = filesList.get(i).getPath().toString().getBytes();
-            byte[] typeBytes = new byte[] {filesList.get(i).getType().getValue()};
+        for (FileDescription fileDescription : filesList) {
+            byte[] strBytes = fileDescription.getPath().toString().getBytes();
+            byte[] typeBytes = new byte[]{fileDescription.getType().getValue()};
             byte[] sizeBytes = Utils.intToByteArray(strBytes.length);
 
             byte[] msgBytesPart = Utils.concatAll(sizeBytes, typeBytes, strBytes);
@@ -167,11 +169,11 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
             msgBytesParts.add(msgBytesPart);
         }
 
-        return Bytes.toArray(
-                msgBytesParts.stream()
+        return Unpooled.wrappedBuffer(
+                Bytes.toArray(msgBytesParts.stream()
                         .map(Bytes::asList)
                         .flatMap(Collection::stream)
-                        .collect(Collectors.toList())
+                        .collect(Collectors.toList()))
         );
     }
 
@@ -179,8 +181,8 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
         return byteBuf.getByte(0);
     }
 
-    private void sendMsg(ChannelHandlerContext ctx, byte[] msg) {
-        ctx.channel().writeAndFlush(Unpooled.wrappedBuffer(msg));
+    private void sendMsg(ChannelHandlerContext ctx, ByteBuf msg) {
+        ctx.writeAndFlush(msg);
     }
 
     private void closeChannel(ChannelHandlerContext ctx) {

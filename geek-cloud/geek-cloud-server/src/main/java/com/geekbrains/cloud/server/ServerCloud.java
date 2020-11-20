@@ -4,6 +4,7 @@ import com.geekbrains.cloud.FileDescription;
 import com.geekbrains.cloud.Type;
 import com.sun.istack.internal.NotNull;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,7 +14,7 @@ import java.util.stream.Collectors;
 
 public class ServerCloud {
 
-    private static final FileDescription cloudRoot = new FileDescription(Paths.get("C:\\Users\\surga\\OneDrive\\Рабочий стол\\Уроки\\Разработка сетевого хранилища на Java\\CloudProject\\geek-cloud"), Type.DIRECTORY);
+    private static final FileDescription cloudRoot = new FileDescription(Paths.get(new File("").getAbsolutePath()), Type.DIRECTORY);
 
     private FileDescription currentRoot;
 
@@ -28,16 +29,6 @@ public class ServerCloud {
         }
     }
 
-    //TODO изменение текущей рабочей директории:
-    // Текущая директория равна "".
-    // Если полученная директория равна "" и полученная директория равна текущей:
-    //    Бросаем исключение о том, что ниже спуститься нельзя.
-    // Иначе если полученная директория не равна текущей директории:
-    //    получаем все файлы из cloudRoot + "/" + текущая директория + "/" + полученный путь;
-    //    текущая директория = текущей директории + "/" + полученный путь;
-    // Иначе:
-    //    получаем все файлы из cloudRoot + "/" + текущая директория;
-    //    текущая директория = Родитель(текущей директории) != null ? Родитель(текущей директории) : ""
     public ServerCloud changeCurrentDirectoryTreeStructure(@NotNull FileDescription newCurrRoot) {
         if (newCurrRoot.getPath().equals(Paths.get("")) &&
                 currentRoot != null && currentRoot.equals(newCurrRoot)) {

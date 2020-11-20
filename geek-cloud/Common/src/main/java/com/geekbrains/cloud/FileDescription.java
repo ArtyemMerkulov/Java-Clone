@@ -80,4 +80,10 @@ public class FileDescription {
     public String toString() {
         return "(" + path + " " + type + ")";
     }
+
+    @NotNull
+    public FileDescription getParent() {
+        Path parentPath = this.path.getParent();
+        return new FileDescription(parentPath != null ? parentPath : Paths.get(""), Type.DIRECTORY);
+    }
 }

@@ -20,8 +20,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.ResourceBundle;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class Controller implements Initializable {
 
@@ -151,21 +149,20 @@ public class Controller implements Initializable {
                 nClicked += 1;
                 // If file was selected
                 if (nClicked == 1) {
-                    label.setBackground(new Background(new BackgroundFill(Color.CORNFLOWERBLUE,
-                            CornerRadii.EMPTY, Insets.EMPTY)));
+                    label.setBackground(new Background(new BackgroundFill(Color.CORNFLOWERBLUE, CornerRadii.EMPTY, Insets.EMPTY)));
                     selectedLabel = label;
                     selectedObject = file;
+
+                    clientCloud.setActionFilePath(file);
                 } // If the file is a directory, then go to a level lower or higher
                 else if (nClicked == 2 && file.getType() == Type.DIRECTORY && file.equals(selectedObject)) {
                     nClicked = 0;
                     selectedObject = null;
                     // If selected object in local repository and root, then go up
                     if (scrollPane.equals(localTreeScroll) && file.equals(clientCloud.getCurrentLocalDirectory())) {
-                        clientCloud.setActionFilePath(file);
                         setLocalDirectoryParams(file.getPath().getParent(), file.getType());
                     } // If selected object in local repository and not root, then go down
                     else if (scrollPane.equals(localTreeScroll) && !file.equals(clientCloud.getCurrentLocalDirectory())) {
-                        clientCloud.setActionFilePath(file);
                         setLocalDirectoryParams(currentLocalRoot.getPath().resolve(file.getPath()), file.getType());
                     } // If selected object in remote repository and root, then go up
                     else if (scrollPane.equals(remoteTreeScroll) && file.equals(clientCloud.getCurrentRemoteDirectory())) {
@@ -177,10 +174,10 @@ public class Controller implements Initializable {
                     }
                 } else if (nClicked == 2 && selectedObject != null && (file.getType() == Type.FILE || !file.equals(selectedObject))) {
                     nClicked = 0;
-                    selectedObject = null;
-                    selectedLabel.setBackground(null);
-                    selectedLabel = null;
+                    disableSelectedObject();
                 }
+
+                if (nClicked > 2) nClicked = 0;
 
                 clientCloud.setDirectoryStructureReceived(false);
             });
@@ -190,6 +187,12 @@ public class Controller implements Initializable {
         filePaneChildren.add(label);
 
         return filePane;
+    }
+
+    private void disableSelectedObject() {
+        selectedObject = null;
+        selectedLabel.setBackground(null);
+        selectedLabel = null;
     }
 
     private void setLocalDirectoryParams(Path path, Type type) {
@@ -232,32 +235,51 @@ public class Controller implements Initializable {
 
     @FXML
     private void downloadFile() {
-//        if (selectedObject != null && selectedLabel != null) {
-//            Path actionFilePath = ClientCloud.getLocalCloudPath()
-//                    .resolve(clientCloud.getLocalTreeStructure()
-//                            .getPath(currentLocalDirectory, currLocalLvl - 1)
-//                            .resolve(Paths.get(selectedObject.getName())));
-//
-//            clientCloud.setActionFilePath(actionFilePath);
-//            clientNetwork.requestDownloadFile(selectedObject, currRemoteLvl);
-//        }
-//
-//        while (true) {
-//            if (clientCloud.isFileReceived()) {
-//                drawTreeStructure(clientCloud.getLocalTreeStructure(), localTreeScroll,
-//                        selectedObject.getName(), currLocalLvl);
-//                clientCloud.setFileReceived(false);
-//                break;
-//            }
-//        }
-//
-//        clientCloud.setActionFilePath(null);
+        if (selectedObject != null) {
+            clientNetwork.requestDownloadFile(selectedObject);
+            disableSelectedObject();
+
+            while (true) {
+                if (clientCloud.isFileReceived()) {
+                    clientCloud.changeCurrentLocalDirectory(currentLocalRoot);
+
+                    currentLocalRootFiles = clientCloud.getCurrentLocalDirectoryFiles();
+
+                    drawTreeStructure(currentLocalRoot, currentLocalRootFiles, localTreeScroll);
+                    clientCloud.setFileReceived(false);
+
+                    break;
+                }
+            }
+        }
     }
 
+//    //TODO:
+//    //  Если выбранный объект не пустой, то можно производить загрузку на удаленный сервер;
+//    //  Иначе ничего не делаем
+//    //  Под загрузкой на удаленный серв понимает следующий порядок действий:
+//    //  1) Отправка данных на сервер;
+//    //  2) Убираем выделение с выбранного объекта и зачищаем его;
+//    //  3) Блокируем GUI до те пор, пока файл не будет передан;
+//    //  4) Если файл получен, то перерисовываем текущую открытую удаленную директорию.
     @FXML
     private void uploadFile() {
-//        if (selectedObject != null && selectedLabel != null)
-//            clientNetwork.requestUploadFile(selectedObject, currLocalLvl);
+//        if (selectedObject != null) {
+//            clientNetwork.sendUploadFile(selectedObject);
+//            disableSelectedObject();
+//
+//            while (true) {
+//                if (clientCloud.isFileSended()) {
+//                    FileDescription fileParentDirectory = selectedObject.getParent();
+//                    setRemoteDirectoryParams(selectedObject, fileParentDirectory.getPath(), fileParentDirectory.getType());
+//
+//                    drawTreeStructure(currentRemoteRoot, currentRemoteRootFiles, remoteTreeScroll);
+//                    clientCloud.setFileSended(false);
+//
+//                    break;
+//                }
+//            }
+//        }
     }
 
     private String getImageUrl(FileDescription file) {

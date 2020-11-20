@@ -4,18 +4,18 @@ import com.geekbrains.cloud.FileDescription;
 import com.geekbrains.cloud.Type;
 import com.sun.istack.internal.NotNull;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.locks.Lock;
 import java.util.stream.Collectors;
 
 public class ClientCloud {
 
-    private static final FileDescription localCloudRoot = new FileDescription(Paths.get("C:\\Users\\surga\\OneDrive\\Рабочий стол\\Уроки\\Разработка сетевого хранилища на Java\\"), Type.DIRECTORY);
+    private static final FileDescription localCloudRoot = new FileDescription(Paths.get(new File("").getAbsolutePath()), Type.DIRECTORY);
 
     private static final FileDescription remoteCloudRoot = new FileDescription(Paths.get(""), Type.DIRECTORY);
 
@@ -31,7 +31,7 @@ public class ClientCloud {
 
     private boolean start;
 
-    private boolean fileReceived;
+    private volatile boolean fileReceived;
 
     private volatile boolean isDirectoryStructureReceived;
 
@@ -49,17 +49,9 @@ public class ClientCloud {
         return currentLocalDirectory;
     }
 
-    public void setCurrentLocalDirectory(@NotNull FileDescription currentLocalDirectory) {
-        this.currentLocalDirectory = currentLocalDirectory;
-    }
-
     @NotNull
     public FileDescription getCurrentRemoteDirectory() {
         return currentRemoteDirectory;
-    }
-
-    public void setCurrentRemoteDirectory(@NotNull FileDescription currentRemoteDirectory) {
-        this.currentRemoteDirectory = currentRemoteDirectory;
     }
 
     public ClientCloud changeCurrentLocalDirectory(@NotNull FileDescription newRootDirectory) {
@@ -114,7 +106,7 @@ public class ClientCloud {
     }
 
     @NotNull
-    public FileDescription getActionFilePath() {
+    public FileDescription getActionFile() {
         return actionFile;
     }
 

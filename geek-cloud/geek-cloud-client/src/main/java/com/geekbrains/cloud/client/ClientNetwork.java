@@ -9,6 +9,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.FixedRecvByteBufAllocator;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -17,9 +18,10 @@ import java.nio.file.Path;
 
 public class ClientNetwork {
 
-    //    private static final String HOST = "192.168.23.59";
     private static final String HOST = "localhost";
     private static final int PORT = 8189;
+
+    private static final int BUF_SIZE = 131071;
 
     private static SocketChannel channel;
 
@@ -38,7 +40,12 @@ public class ClientNetwork {
                             @Override
                             protected void initChannel(SocketChannel socketChannel) {
                                 channel = socketChannel;
+
+                                socketChannel.config().setSendBufferSize(BUF_SIZE);
+                                socketChannel.config().setRecvByteBufAllocator(new FixedRecvByteBufAllocator(BUF_SIZE));
+
                                 clientMainHandler = new ClientMainHandler(clientCloud);
+
                                 socketChannel.pipeline().addLast(clientMainHandler);
                             }
                         });
@@ -74,27 +81,24 @@ public class ClientNetwork {
         return Unpooled.wrappedBuffer(Utils.concatAll(commandBytes, lenBytes, requestPathBytes));
     }
 
-//    public void requestDownloadFile(FileDescription selectedObject, int lvl) {
-//        Path target = ClientCloud.getFullPath(clientCloud.getRemoteTreeStructure(), selectedObject, lvl);
-//        byte[] m = getDownloadMsg(target);
-//        System.out.println(Arrays.toString(m));
-//        channel.writeAndFlush(m);
-//    }
-
     public void requestUploadFile(FileDescription selectedObject, int lvl) {
         channel.writeAndFlush(new byte[] {3});
-    }
-
-    private byte[] getDownloadMsg(Path target) {
-        byte[] downloadFlag = new byte[] {4};
-        byte[] targetPathBytes = target.toString().getBytes();
-
-        return Utils.concatAll(downloadFlag, targetPathBytes);
     }
 
     private byte[] getUploadMsg(Path target) {
         byte[] downloadFlag = new byte[] {4};
         byte[] targetPathBytes = target.toString().getBytes();
         return Utils.concatAll(downloadFlag, targetPathBytes);
+    }
+
+    public void requestDownloadFile(FileDescription selectedObject) {
+        channel.writeAndFlush(getRequestDownloadMsg(selectedObject.getPath()));
+    }
+
+    private ByteBuf getRequestDownloadMsg(Path target) {
+        byte[] downloadFlag = new byte[] {Command.REQUEST_DOWNLOAD_FILE.getValue()};
+        byte[] targetPathBytes = target.toString().getBytes();
+
+        return Unpooled.wrappedBuffer(Utils.concatAll(downloadFlag, targetPathBytes));
     }
 }
