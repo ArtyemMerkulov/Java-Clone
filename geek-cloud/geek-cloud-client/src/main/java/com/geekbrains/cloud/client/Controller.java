@@ -11,9 +11,11 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextField;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import org.apache.commons.codec.digest.DigestUtils;
 
 import java.net.URL;
 import java.nio.file.Path;
@@ -54,6 +56,15 @@ public class Controller implements Initializable {
     private Label selectedLabel;
 
     @FXML
+    public VBox stage;
+
+    @FXML
+    public Pane authPane;
+
+    @FXML
+    public HBox mainBox;
+
+    @FXML
     private ScrollPane remoteTreeScroll;
 
     @FXML
@@ -65,19 +76,19 @@ public class Controller implements Initializable {
     @FXML
     private Button upload;
 
+    @FXML
+    public TextField loginField;
+
+    @FXML
+    public TextField passwordField;
+
+    @FXML
+    public Button signIn;
+
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-//        clientNetwork = new ClientNetwork();
-//        do {
-//            clientCloud = clientNetwork.getClientCloud();
-//        } while (clientCloud == null);
-
-        while (!clientCloud.getStart()) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        while (!clientCloud.isStart()) {
+            waitResponse(50);
         }
     }
 
@@ -87,15 +98,46 @@ public class Controller implements Initializable {
     }
 
     @FXML
-    public void getDefaultRemoteDirectory() {
+    public void signIn() {
+        String userLogin = loginField.getText();
+        String userPassword = DigestUtils.md5Hex(passwordField.getText());
+
+        clientNetwork.sendAuthData(userLogin, userPassword);
+
+        while(true) {
+            if (clientCloud.isAuthorized() == 1) {
+                System.out.println(clientCloud.isAuthorized());
+                getDefaultRemoteDirectory();
+                getDefaultLocalDirectory();
+
+                stage.getChildren().remove(0);
+                mainBox.setVisible(true);
+
+                break;
+            } else if (clientCloud.isAuthorized() == -1) {
+                break;
+            }
+
+            waitResponse(50);
+        }
+    }
+
+    @FXML
+    public void signUp() {
+        String userLogin = loginField.getText();
+        String userPassword = DigestUtils.md5Hex(passwordField.getText());
+
+        clientNetwork.sendRegData(userLogin, userPassword);
+    }
+
+    private void getDefaultRemoteDirectory() {
         currentRemoteRoot = ClientCloud.getRemoteCloudRoot();
         currentRemoteRootFiles = clientCloud.getCurrentRemoteDirectoryFiles();
 
         drawTreeStructure(currentRemoteRoot, currentRemoteRootFiles, remoteTreeScroll);
     }
 
-    @FXML
-    public void getDefaultLocalDirectory() {
+    private void getDefaultLocalDirectory() {
         currentLocalRoot = ClientCloud.getLocalCloudRoot();
         currentLocalRootFiles = clientCloud.getCurrentLocalDirectoryFiles();
 
@@ -153,7 +195,15 @@ public class Controller implements Initializable {
                     selectedLabel = label;
                     selectedObject = file;
 
-                    clientCloud.setActionFilePath(file);
+                    clientCloud.setActionFile(file);
+
+                    if (scrollPane.equals(localTreeScroll)) {
+                        download.setDisable(true);
+                        upload.setDisable(false);
+                    } else if (scrollPane.equals(remoteTreeScroll)) {
+                        download.setDisable(false);
+                        upload.setDisable(true);
+                    }
                 } // If the file is a directory, then go to a level lower or higher
                 else if (nClicked == 2 && file.getType() == Type.DIRECTORY && file.equals(selectedObject)) {
                     nClicked = 0;
@@ -214,13 +264,9 @@ public class Controller implements Initializable {
 
         FileDescription newRoot = new FileDescription(newPath, newType);
 
-        clientCloud.setActionFilePath(newRoot);
+        clientCloud.setActionFile(newRoot);
         while(!clientCloud.isDirectoryStructureReceived()) {
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            waitResponse(50);
         }
 
         List<FileDescription> filesInRoot = clientCloud.getCurrentRemoteDirectoryFiles();
@@ -254,35 +300,46 @@ public class Controller implements Initializable {
         }
     }
 
-//    //TODO:
-//    //  Если выбранный объект не пустой, то можно производить загрузку на удаленный сервер;
-//    //  Иначе ничего не делаем
-//    //  Под загрузкой на удаленный серв понимает следующий порядок действий:
-//    //  1) Отправка данных на сервер;
-//    //  2) Убираем выделение с выбранного объекта и зачищаем его;
-//    //  3) Блокируем GUI до те пор, пока файл не будет передан;
-//    //  4) Если файл получен, то перерисовываем текущую открытую удаленную директорию.
     @FXML
     private void uploadFile() {
-//        if (selectedObject != null) {
-//            clientNetwork.sendUploadFile(selectedObject);
-//            disableSelectedObject();
-//
-//            while (true) {
-//                if (clientCloud.isFileSended()) {
-//                    FileDescription fileParentDirectory = selectedObject.getParent();
-//                    setRemoteDirectoryParams(selectedObject, fileParentDirectory.getPath(), fileParentDirectory.getType());
-//
-//                    drawTreeStructure(currentRemoteRoot, currentRemoteRootFiles, remoteTreeScroll);
-//                    clientCloud.setFileSended(false);
-//
-//                    break;
-//                }
-//            }
-//        }
+        if (selectedObject != null) {
+            clientNetwork.sendUploadFileDescription(selectedObject);
+
+            while (true) {
+                if (clientCloud.isFileSent()) {
+                    FileDescription currentRemoteDir = clientCloud.getCurrentRemoteDirectory();
+
+                    clientCloud.setActionFile(currentRemoteDir);
+                    clientNetwork.getRemoteDirectoryTreeStructure(currentRemoteDir);
+
+                    while (true) {
+                        if (clientCloud.isDirectoryStructureReceived()) {
+                            drawTreeStructure(clientCloud.getCurrentRemoteDirectory(),
+                                    clientCloud.getCurrentRemoteDirectoryFiles(), remoteTreeScroll);
+
+                            break;
+                        }
+                    }
+
+                    disableSelectedObject();
+
+                    clientCloud.setFileSent(false);
+
+                    break;
+                }
+            }
+        }
     }
 
     private String getImageUrl(FileDescription file) {
         return file.isFile() ? "img/file_icon.png" : "img/folder_icon.png";
+    }
+
+    private void waitResponse(int t) {
+        try {
+            Thread.sleep(t);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 }

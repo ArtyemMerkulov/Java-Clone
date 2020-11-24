@@ -9,6 +9,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 
+import java.io.IOException;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -21,13 +22,9 @@ import java.util.stream.Collectors;
 
 public class ServerMainHandler extends ChannelInboundHandlerAdapter {
 
-    private static final List<Channel> channels = new ArrayList<>();
-
     private static final int BUF_SIZE = 131070;
 
-    private static int newClientIndex = 1;
-
-    private String clientName;
+    private ChannelHandlerContext ctx;
 
     private ServerCloud serverCloud;
 
@@ -36,6 +33,8 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         System.out.println("Handler added");
+
+        this.ctx = ctx;
         tmpBuf = ctx.alloc().buffer(BUF_SIZE);
     }
 
@@ -48,13 +47,6 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
-        channels.add(ctx.channel());
-
-        clientName = "Клиент #" + newClientIndex;
-        newClientIndex++;
-        
-        System.out.println("Клиент " + clientName + " подключился: " + ctx);
-
         serverCloud = new ServerCloud();
     }
 
@@ -94,8 +86,6 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
                             while(bytesRead < fileSize) {
                                 long bytesLeft = fileSize - bytesRead;
                                 int bufSize = bytesLeft / BUF_SIZE > 0 ? BUF_SIZE : (int) bytesLeft;
-                                System.out.println("bytesLeft: " + bytesLeft);
-                                System.out.println("bufSize: " + bufSize);
 
                                 buffer = channel.map(FileChannel.MapMode.READ_ONLY, bytesRead, bufSize);
                                 unpooled = Unpooled.buffer(bufSize + 1);
@@ -116,7 +106,90 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
                     }
 
                     break;
+                // Processing a client's file upload request
+                case RECEIVE_UPLOAD_FILE_DESCRIPTION:
+                    serverCloud.setActionFile(getUploadFileDescription());
+                    
+                    sendMsg(ctx, getReceiveUploadFileDescriptionMsg());
+                    
+                    break;
+                case RECEIVE_PART_OF_UPLOAD_FILE:
+                    writeFilePart(serverCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+
+                    break;
+                case RECEIVE_END_PART_OF_UPLOAD_FILE:
+                    writeFilePart(serverCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+
+                    serverCloud.setActionFile(null);
+
+                    sendMsg(ctx, getReceiveUploadFileEndMsg());
+                    // Extract current root directory
+                    currDirectory = serverCloud.getCurrentRoot();
+                    // Got a list of files contained in this path
+                    directoryTreeStructure = serverCloud.changeCurrentDirectoryTreeStructure(currDirectory)
+                            .getCurrentDirectoryTreeStructure();
+                    // Generated a byte array with a response
+                    ByteBuf updateDirStructureBeforeUploadFileMsg = getMsgBytesFromFilesList(directoryTreeStructure,
+                            Command.REQUEST_CLOUD_TREE_STRUCTURE);
+                    sendMsg(ctx, updateDirStructureBeforeUploadFileMsg);
+                    // Clear buffer
+                    resetBuffer();
+
+                    break;
             }
+        }
+
+        resetBuffer();
+    }
+
+    private void resetBuffer() {
+        clearBuffer();
+        tmpBuf = ctx.alloc().buffer(BUF_SIZE);
+    }
+
+    private void clearBuffer() {
+        tmpBuf.clear();
+        tmpBuf.release();
+        tmpBuf = null;
+    }
+
+    private FileDescription getUploadFileDescription() {
+        tmpBuf.skipBytes(1);
+
+        Type fileType = Type.getTypeByValue(tmpBuf.readByte());
+
+        int nameLen = tmpBuf.readInt();
+        byte[] nameBytes = new byte[nameLen];
+
+        tmpBuf.readBytes(nameBytes, 0, nameLen);
+
+        Path fileName = Paths.get(new String(nameBytes, StandardCharsets.UTF_8));
+
+        return new FileDescription(fileName, fileType);
+    }
+
+    private ByteBuf getReceiveUploadFileDescriptionMsg() {
+        byte[] commandBytes = new byte[] {Command.UPLOAD_FILE_DESCRIPTION_RECEIVED.getValue()};
+
+        return Unpooled.wrappedBuffer(commandBytes);
+    }
+
+    private ByteBuf getReceiveUploadFileEndMsg() {
+        byte[] commandBytes = new byte[] {Command.UPLOAD_FILE_RECEIVED.getValue()};
+
+        return Unpooled.wrappedBuffer(commandBytes);
+    }
+
+    private void writeFilePart(FileDescription file, StandardOpenOption... option) {
+        tmpBuf.skipBytes(1);
+
+        byte[] buf = new byte[tmpBuf.readableBytes()];
+        tmpBuf.readBytes(buf);
+
+        try {
+            Files.write(ServerCloud.getCloudRootPath().resolve(file.getPath()), buf, option);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -144,13 +217,11 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
-        System.out.println("Клиент " + clientName + " вышел из сети");
         closeChannel(ctx);
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        System.out.println("Клиент " + clientName + " отвалился");
         closeChannel(ctx);
         cause.printStackTrace();
     }
@@ -186,7 +257,6 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void closeChannel(ChannelHandlerContext ctx) {
-        channels.remove(ctx.channel());
         ctx.close();
     }
 }

@@ -1,5 +1,6 @@
 package com.geekbrains.cloud.client;
 
+import com.geekbrains.cloud.Command;
 import com.geekbrains.cloud.FileDescription;
 import com.geekbrains.cloud.Type;
 import com.sun.istack.internal.NotNull;
@@ -29,16 +30,22 @@ public class ClientCloud {
 
     private List<FileDescription> currentRemoteDirectoryFiles;
 
-    private boolean start;
+    private boolean isStart;
 
-    private volatile boolean fileReceived;
+    private volatile boolean isFileReceived;
+
+    private volatile boolean isFileSent;
 
     private volatile boolean isDirectoryStructureReceived;
 
+    private volatile Command authCommand;
+
     public ClientCloud() {
-        start = false;
-        fileReceived = false;
+        isStart = false;
+        isFileReceived = false;
+        isFileSent = false;
         isDirectoryStructureReceived = false;
+        authCommand = null;
         actionFile = remoteCloudRoot;
         changeCurrentLocalDirectory(localCloudRoot);
         changeCurrentRemoteDirectory(remoteCloudRoot, new ArrayList<>());
@@ -110,25 +117,25 @@ public class ClientCloud {
         return actionFile;
     }
 
-    public void setActionFilePath(FileDescription actionFile) {
+    public void setActionFile(FileDescription actionFile) {
         this.actionFile = new FileDescription(actionFile);
     }
 
     @NotNull
-    public boolean getStart() {
-        return start;
+    public boolean isStart() {
+        return isStart;
     }
 
-    public void setStart(boolean start) {
-        this.start = start;
+    public void setIsStart(boolean isStart) {
+        this.isStart = isStart;
     }
 
-    public void setFileReceived(boolean fileReceived) {
-        this.fileReceived = fileReceived;
+    public void setFileReceived(boolean isFileReceived) {
+        this.isFileReceived = isFileReceived;
     }
 
     public boolean isFileReceived() {
-        return fileReceived;
+        return isFileReceived;
     }
 
     public void setDirectoryStructureReceived(boolean isDirectoryStructureReceived) {
@@ -137,5 +144,26 @@ public class ClientCloud {
 
     public boolean isDirectoryStructureReceived() {
         return isDirectoryStructureReceived;
+    }
+
+    public boolean isFileSent() {
+        return isFileSent;
+    }
+
+    public void setFileSent(boolean isFileSent) {
+        this.isFileSent = isFileSent;
+    }
+
+    public void setAuthorized(Command authCommand) {
+        this.authCommand = authCommand;
+    }
+
+    public int isAuthorized() {
+//        System.out.println("TEST: " + authCommand);
+        if (authCommand == Command.AUTH_OK) {
+            return 1;
+        } else if (authCommand == Command.AUTH_NOT_OK) {
+            return -1;
+        } else return 0;
     }
 }

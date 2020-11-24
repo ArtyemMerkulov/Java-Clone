@@ -18,10 +18,13 @@ public class ServerCloud {
 
     private FileDescription currentRoot;
 
+    private FileDescription actionFile;
+
     private List<FileDescription> currentDirectoryTreeStructure;
 
     public ServerCloud() {
         currentRoot = null;
+        actionFile = null;
         try {
             currentDirectoryTreeStructure = getFilesOnPath(cloudRoot.getPath());
         } catch (IOException e) {
@@ -29,19 +32,19 @@ public class ServerCloud {
         }
     }
 
+    public FileDescription getCurrentRoot() {
+        return currentRoot;
+    }
+
     public ServerCloud changeCurrentDirectoryTreeStructure(@NotNull FileDescription newCurrRoot) {
-        if (newCurrRoot.getPath().equals(Paths.get("")) &&
-                currentRoot != null && currentRoot.equals(newCurrRoot)) {
-            throw new IllegalArgumentException("Cannot go above the root.");
-        } else if (!newCurrRoot.equals(currentRoot)) {
-//            Path followPath = currentRoot == null ? Paths.get("") : currentRoot.getPath();
-//            currentRoot = new FileDescription(followPath.resolve(newCurrRoot.getPath()), Type.DIRECTORY);
-            currentRoot = new FileDescription(newCurrRoot.getPath(), Type.DIRECTORY);
+        if (!newCurrRoot.equals(currentRoot) || (newCurrRoot.getPath().equals(Paths.get("")) &&
+                currentRoot != null && currentRoot.equals(newCurrRoot))) {
+            currentRoot = new FileDescription(newCurrRoot);
         } else if (newCurrRoot.equals(currentRoot)) {
             Path parentPath = newCurrRoot.getPath().getParent();
             currentRoot = new FileDescription(parentPath != null ? parentPath : Paths.get(""), Type.DIRECTORY);
         }
-        System.out.println("CURRENT ROOT: " + currentRoot);
+
         try {
             currentDirectoryTreeStructure = getFilesOnPath(cloudRoot.getPath().resolve(currentRoot.getPath()));
         } catch (IOException e) {
@@ -71,5 +74,13 @@ public class ServerCloud {
     @NotNull
     public static Path getCloudRootPath() {
         return cloudRoot.getPath();
+    }
+
+    public void setActionFile(FileDescription actionFile) {
+        this.actionFile = actionFile;
+    }
+
+    public FileDescription getActionFile() {
+        return actionFile;
     }
 }

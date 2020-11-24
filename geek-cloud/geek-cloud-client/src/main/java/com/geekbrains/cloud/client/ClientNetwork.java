@@ -2,6 +2,7 @@ package com.geekbrains.cloud.client;
 
 import com.geekbrains.cloud.Command;
 import com.geekbrains.cloud.FileDescription;
+import com.geekbrains.cloud.Type;
 import com.geekbrains.cloud.Utils;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -14,7 +15,14 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 
+import java.io.IOException;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
+import java.util.EnumSet;
 
 public class ClientNetwork {
 
@@ -25,7 +33,7 @@ public class ClientNetwork {
 
     private static SocketChannel channel;
 
-    private static ClientCloud clientCloud = new ClientCloud();
+    private static final ClientCloud clientCloud = new ClientCloud();
 
     private ClientMainHandler clientMainHandler;
 
@@ -50,7 +58,6 @@ public class ClientNetwork {
                             }
                         });
                 ChannelFuture future = b.connect(HOST, PORT).sync();
-                getRemoteDirectoryTreeStructure(clientCloud.getCurrentRemoteDirectory());
                 future.channel().closeFuture().sync();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -61,7 +68,44 @@ public class ClientNetwork {
         t.start();
     }
 
+    public void sendAuthData(String login, String password) {
+        channel.writeAndFlush(getAuthDataMsg(login, password));
+    }
+
+    private ByteBuf getAuthDataMsg(String login, String password) {
+        byte[] flag = new byte[] {Command.AUTH_DATA.getValue()};
+        byte[] userLoginBytes = login.getBytes();
+        byte[] userPasswordBytes = password.getBytes();
+
+        return Unpooled.wrappedBuffer(Utils.concatAll(flag, userPasswordBytes, userLoginBytes));
+    }
+
+    public void sendRegData(String login, String password) {
+        channel.writeAndFlush(getRegDataMsg(login, password));
+    }
+
+    private ByteBuf getRegDataMsg(String login, String password) {
+        byte[] flag = new byte[] {Command.REGISTRATION_DATA.getValue()};
+        byte[] userLoginBytes = login.getBytes();
+        byte[] userPasswordBytes = password.getBytes();
+
+        return Unpooled.wrappedBuffer(Utils.concatAll(flag, userPasswordBytes, userLoginBytes));
+    }
+
+    public void getRemoteDirectoryTreeStructure(FileDescription requestRoot) {
+        sendMsg(getRequestTreeStructureByteMsg(requestRoot));
+    }
+
+    private ByteBuf getRequestTreeStructureByteMsg(FileDescription requestRoot) {
+        byte[] commandBytes = new byte[]{Command.REQUEST_CLOUD_TREE_STRUCTURE.getValue()};
+        byte[] requestPathBytes = requestRoot.getPath().toString().getBytes();
+        byte[] lenBytes = Utils.intToByteArray(requestPathBytes.length);
+
+        return Unpooled.wrappedBuffer(Utils.concatAll(commandBytes, lenBytes, requestPathBytes));
+    }
+
     public void close() {
+        clientCloud.setAuthorized(Command.AUTH_NOT_OK);
         channel.close();
     }
 
@@ -69,30 +113,8 @@ public class ClientNetwork {
         return clientCloud;
     }
 
-    public void getRemoteDirectoryTreeStructure(FileDescription requestRoot) {
-        channel.writeAndFlush(getRequestTreeStructureByteMsg(requestRoot));
-    }
-
-    private ByteBuf getRequestTreeStructureByteMsg(FileDescription requestRoot) {
-        byte[] commandBytes = new byte[] {Command.REQUEST_CLOUD_TREE_STRUCTURE.getValue()};
-        byte[] requestPathBytes = requestRoot.getPath().toString().getBytes();
-        byte[] lenBytes = Utils.intToByteArray(requestPathBytes.length);
-
-        return Unpooled.wrappedBuffer(Utils.concatAll(commandBytes, lenBytes, requestPathBytes));
-    }
-
-    public void requestUploadFile(FileDescription selectedObject, int lvl) {
-        channel.writeAndFlush(new byte[] {3});
-    }
-
-    private byte[] getUploadMsg(Path target) {
-        byte[] downloadFlag = new byte[] {4};
-        byte[] targetPathBytes = target.toString().getBytes();
-        return Utils.concatAll(downloadFlag, targetPathBytes);
-    }
-
     public void requestDownloadFile(FileDescription selectedObject) {
-        channel.writeAndFlush(getRequestDownloadMsg(selectedObject.getPath()));
+        sendMsg(getRequestDownloadMsg(selectedObject.getPath()));
     }
 
     private ByteBuf getRequestDownloadMsg(Path target) {
@@ -100,5 +122,26 @@ public class ClientNetwork {
         byte[] targetPathBytes = target.toString().getBytes();
 
         return Unpooled.wrappedBuffer(Utils.concatAll(downloadFlag, targetPathBytes));
+    }
+
+    public void sendUploadFileDescription(FileDescription selectedObject) {
+        sendMsg(getUploadFileDescriptionMsg(selectedObject));
+    }
+
+    private ByteBuf getUploadFileDescriptionMsg(FileDescription selectedObject) {
+        Path filePath = ClientCloud.getLocalCloudRoot().getPath().resolve(selectedObject.getPath());
+
+        byte[] flag = new byte[] {Command.RECEIVE_UPLOAD_FILE_DESCRIPTION.getValue()};
+        byte[] fileTypeBytes = new byte[] {Files.isDirectory(filePath) ? Type.DIRECTORY.getValue() : Type.FILE.getValue()};
+        byte[] fileNameBytes = filePath.getFileName().toString().getBytes();
+        byte[] fileNameLenBytes = Utils.intToByteArray(fileNameBytes.length);
+
+        return Unpooled.wrappedBuffer(Utils.concatAll(flag, fileTypeBytes, fileNameLenBytes, fileNameBytes));
+    }
+
+    private void sendMsg(ByteBuf msg) {
+        if (clientCloud.isAuthorized() == 1) {
+            channel.writeAndFlush(msg);
+        }
     }
 }

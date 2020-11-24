@@ -3,18 +3,24 @@ package com.geekbrains.cloud.client;
 import com.geekbrains.cloud.Command;
 import com.geekbrains.cloud.FileDescription;
 import com.geekbrains.cloud.Type;
+import com.geekbrains.cloud.Utils;
 import com.sun.istack.internal.NotNull;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
 import java.io.IOException;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 
 public class ClientMainHandler extends ChannelInboundHandlerAdapter {
@@ -33,58 +39,68 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
-        System.out.println("Handler added");
-
         this.ctx = ctx;
         tmpBuf = ctx.alloc().buffer(BUF_SIZE);
 
-        clientCloud.setStart(true);
+        clientCloud.setIsStart(true);
     }
 
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) {
-        System.out.println("Handler removed");
         clearBuffer();
     }
+
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         tmpBuf.writeBytes((ByteBuf) msg);
 
-        switch (Command.getCommandByValue(getCommandValue(tmpBuf))) {
-            case REQUEST_CLOUD_TREE_STRUCTURE:
-                List<FileDescription> remoteFilesList = getFilesDescriptionsFromRequest();
+        byte[] t1 = new byte[tmpBuf.readableBytes()];
+        tmpBuf.readBytes(t1);
+        tmpBuf.resetReaderIndex();
+        System.out.println(Arrays.toString(t1));
 
-                clientCloud.changeCurrentRemoteDirectory(clientCloud.getActionFile(), remoteFilesList);
-                clientCloud.setDirectoryStructureReceived(true);
+        if (tmpBuf.isReadable() && getCommandValue(tmpBuf) <= Command.maxValue()) {
+            switch (Command.getCommandByValue(getCommandValue(tmpBuf))) {
+                case AUTH_OK:
+                    clientCloud.setAuthorized(Command.AUTH_OK);
+                    getRemoteDirectoryTreeStructure(clientCloud.getCurrentRemoteDirectory());
+                    break;
+                case AUTH_NOT_OK:
+                    clientCloud.setAuthorized(Command.AUTH_NOT_OK);
+                    break;
+                case REQUEST_CLOUD_TREE_STRUCTURE:
+                    if (clientCloud.isAuthorized() == 1) {
+                        List<FileDescription> remoteFilesList = getFilesDescriptionsFromRequest();
 
-                break;
-            case RECEIVE_PART_OF_DOWNLOAD_FILE:
-                writeFilePart(clientCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-
-                break;
-            case RECEIVE_END_PART_OF_DOWNLOAD_FILE:
-                writeFilePart(clientCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-
-                clientCloud.setFileReceived(true);
-                break;
+                        clientCloud.changeCurrentRemoteDirectory(clientCloud.getActionFile(), remoteFilesList);
+                        clientCloud.setDirectoryStructureReceived(true);
+                    }
+                    break;
+                case RECEIVE_PART_OF_DOWNLOAD_FILE:
+                    if (clientCloud.isAuthorized() == 1) {
+                        writeFilePart(clientCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                    }
+                    break;
+                case RECEIVE_END_PART_OF_DOWNLOAD_FILE:
+                    if (clientCloud.isAuthorized() == 1) {
+                        writeFilePart(clientCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                        clientCloud.setFileReceived(true);
+                    }
+                    break;
+                case UPLOAD_FILE_DESCRIPTION_RECEIVED:
+                    if (clientCloud.isAuthorized() == 1) {
+                        sendUploadFileData(clientCloud.getActionFile());
+                    }
+                    break;
+                case UPLOAD_FILE_RECEIVED:
+                    if (clientCloud.isAuthorized() == 1) {
+                        clientCloud.setFileSent(true);
+                    }
+                    break;
+            }
         }
 
         resetBuffer();
-
-//        if (getCommand(tmpBuf) == 3 && tmpBuf.writerIndex() == getCommandLen(tmpBuf)) {
-//            List<Path> remotePathsList = getPathsFromFolderTreeBytes(5);
-//
-//            clientCloud.setRemoteTreeStructure(remotePathsList);
-//
-//            clearBuffer(tmpBuf);
-//        } else if (getCommand(tmpBuf) == 4 && tmpBuf.getByte(1) == 1) {
-//            s += tmpBuf.readableBytes();
-//            write();
-//        } else if (getCommand(tmpBuf) == 4 && tmpBuf.getByte(1) == 2) {
-//            s += tmpBuf.readableBytes();
-//            write();
-//            clientCloud.setFileReceived(true);
-//        }
     }
 
     @Override
@@ -93,14 +109,58 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
         cause.printStackTrace();
     }
 
-//    private void write() throws IOException {
-//        Path fileName = clientCloud.getActionFile();
-//
-//        if (!Files.exists(fileName)) writeFilePart(fileName, StandardOpenOption.CREATE);
-//        else writeFilePart(fileName, StandardOpenOption.APPEND);
-//
-//        clearBuffer(tmpBuf);
-//    }
+    public void getRemoteDirectoryTreeStructure(FileDescription requestRoot) {
+        ctx.writeAndFlush(getRequestTreeStructureByteMsg(requestRoot));
+    }
+
+    private ByteBuf getRequestTreeStructureByteMsg(FileDescription requestRoot) {
+        byte[] commandBytes = new byte[]{Command.REQUEST_CLOUD_TREE_STRUCTURE.getValue()};
+        byte[] requestPathBytes = requestRoot.getPath().toString().getBytes();
+        byte[] lenBytes = Utils.intToByteArray(requestPathBytes.length);
+
+        byte[] msg = Utils.concatAll(commandBytes, lenBytes, requestPathBytes);
+
+        return Unpooled.wrappedBuffer(msg);
+    }
+
+    public void sendUploadFileData(FileDescription selectedObject) {
+        int maxBufSize = BUF_SIZE - 2;
+        Path filePath = clientCloud.getCurrentLocalDirectory().getPath().resolve(selectedObject.getPath());
+
+        if (Files.exists(filePath)) {
+            try(FileChannel channel = (FileChannel) Files.newByteChannel(filePath, EnumSet.of(StandardOpenOption.READ))) {
+                MappedByteBuffer buffer;
+                ByteBuf unpooled;
+                long bytesRead = 0, fileSize = channel.size();
+
+                while(bytesRead < fileSize) {
+                    long bytesLeft = fileSize - bytesRead;
+                    int bufSize = bytesLeft / maxBufSize > 0 ? maxBufSize : (int) bytesLeft;
+
+                    buffer = channel.map(FileChannel.MapMode.READ_ONLY, bytesRead, bufSize);
+                    unpooled = Unpooled.buffer(bufSize + 1);
+
+                    bytesRead += bufSize;
+
+                    unpooled.setByte(0, (bufSize == maxBufSize ? Command.RECEIVE_PART_OF_UPLOAD_FILE.getValue() :
+                            Command.RECEIVE_END_PART_OF_UPLOAD_FILE.getValue()));
+                    unpooled.writerIndex(1);
+                    unpooled.writeBytes(buffer);
+
+                    sendMsg(unpooled);
+
+                    buffer.clear();
+                    unpooled.clear();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void sendMsg(ByteBuf msg) {
+        ctx.writeAndFlush(msg);
+    }
 
     private void writeFilePart(FileDescription file, StandardOpenOption... option) {
         tmpBuf.skipBytes(1);
