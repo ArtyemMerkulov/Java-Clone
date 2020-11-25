@@ -40,12 +40,15 @@ public class ClientCloud {
 
     private volatile Command authCommand;
 
+    private volatile String regAnswer;
+
     public ClientCloud() {
         isStart = false;
         isFileReceived = false;
         isFileSent = false;
         isDirectoryStructureReceived = false;
         authCommand = null;
+        regAnswer = null;
         actionFile = remoteCloudRoot;
         changeCurrentLocalDirectory(localCloudRoot);
         changeCurrentRemoteDirectory(remoteCloudRoot, new ArrayList<>());
@@ -159,11 +162,24 @@ public class ClientCloud {
     }
 
     public int isAuthorized() {
-//        System.out.println("TEST: " + authCommand);
         if (authCommand == Command.AUTH_OK) {
             return 1;
         } else if (authCommand == Command.AUTH_NOT_OK) {
             return -1;
         } else return 0;
+    }
+
+    public void setRegistrationMessage(Command registrationMessage) {
+        if (registrationMessage == Command.REGISTRATION_OK) {
+            this.regAnswer = "Your are registered!";
+        } else if (registrationMessage == Command.REGISTRATION_NOT_OK) {
+            this.regAnswer = "Registration failed!";
+        } else if (registrationMessage == null){
+            this.regAnswer = null;
+        }
+    }
+
+    public String getRegistrationMessage() {
+        return regAnswer;
     }
 }

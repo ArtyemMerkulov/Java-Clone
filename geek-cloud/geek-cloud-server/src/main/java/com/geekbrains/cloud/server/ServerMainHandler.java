@@ -8,6 +8,7 @@ import com.google.common.primitives.Bytes;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
+import sun.misc.Cleaner;
 
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
@@ -24,127 +25,125 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
 
     private static final int BUF_SIZE = 131070;
 
-    private ChannelHandlerContext ctx;
-
     private ServerCloud serverCloud;
 
     private ByteBuf tmpBuf;
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
-        System.out.println("Handler added");
-
-        this.ctx = ctx;
         tmpBuf = ctx.alloc().buffer(BUF_SIZE);
     }
 
     @Override
     public void handlerRemoved(ChannelHandlerContext ctx) {
-        System.out.println("Handler removed");
         tmpBuf.release();
         tmpBuf = null;
     }
 
     @Override
-    public void channelActive(ChannelHandlerContext ctx) {
-        serverCloud = new ServerCloud();
-    }
-
-    @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        tmpBuf.writeBytes((ByteBuf) msg);
+        if (msg instanceof ServerCloud) {
+            serverCloud = (ServerCloud) msg;
+        } else if (msg instanceof ByteBuf) {
+            tmpBuf.writeBytes((ByteBuf) msg);
 
-        if (tmpBuf.isReadable() && getCommandValue(tmpBuf) <= Command.maxValue()) {
-            // Got a request command
-            switch (Command.getCommandByValue(getCommandValue(tmpBuf))) {
-                // Handling a client request for a directory structure
-                case REQUEST_CLOUD_TREE_STRUCTURE:
-                    // Extract request path and make file description
-                    Path currDirectoryPath = getRequestCurrentDirectory(tmpBuf);
-                    FileDescription currDirectory = new FileDescription(currDirectoryPath, Type.DIRECTORY);
-                    // Got a list of files contained in this path
-                    List<FileDescription> directoryTreeStructure = serverCloud.changeCurrentDirectoryTreeStructure(currDirectory)
-                            .getCurrentDirectoryTreeStructure();
-                    // Generated a byte array with a response
-                    ByteBuf responseMsg = getMsgBytesFromFilesList(directoryTreeStructure, Command.REQUEST_CLOUD_TREE_STRUCTURE);
-                    sendMsg(ctx, responseMsg);
-                    // Clear buffer
-                    tmpBuf.clear();
-                    break;
-                // Processing a client's file download request
-                case REQUEST_DOWNLOAD_FILE:
-                    Path filePath = ServerCloud.getCloudRootPath().resolve(getFilePath(tmpBuf));
+            if (tmpBuf.isReadable() && getCommandValue(tmpBuf) <= Command.maxValue()) {
+                // Got a request command
+                switch (Command.getCommandByValue(getCommandValue(tmpBuf))) {
+                    // Handling a client request for a directory structure
+                    case REQUEST_CLOUD_TREE_STRUCTURE:
+                        // Extract request path and make file description
+                        Path currDirectoryPath = getRequestCurrentDirectory(tmpBuf);
+                        FileDescription currDirectory = new FileDescription(currDirectoryPath, Type.DIRECTORY);
+                        // Got a list of files contained in this path
+                        List<FileDescription> directoryTreeStructure = serverCloud.changeCurrentDirectoryTreeStructure(currDirectory)
+                                .getCurrentDirectoryTreeStructure();
+                        // Generated a byte array with a response
+                        ByteBuf responseMsg = getMsgBytesFromFilesList(directoryTreeStructure, Command.REQUEST_CLOUD_TREE_STRUCTURE);
+                        sendMsg(ctx, responseMsg);
 
-                    tmpBuf.clear();
+                        break;
+                    // Processing a client's file download request
+                    case REQUEST_DOWNLOAD_FILE:
+                        Path filePath = ServerCloud.getCloudRootPath().resolve(getFilePath(tmpBuf));
 
-                    if (Files.exists(filePath)) {
-                        try(FileChannel channel = (FileChannel) Files.newByteChannel(filePath, EnumSet.of(StandardOpenOption.READ))) {
-                            MappedByteBuffer buffer;
+                        tmpBuf.clear();
+
+                        if (Files.exists(filePath)) {
+                            MappedByteBuffer buffer = null;
                             ByteBuf unpooled;
-                            long bytesRead = 0, fileSize = channel.size();
 
-                            while(bytesRead < fileSize) {
-                                long bytesLeft = fileSize - bytesRead;
-                                int bufSize = bytesLeft / BUF_SIZE > 0 ? BUF_SIZE : (int) bytesLeft;
+                            try (FileChannel channel = (FileChannel) Files.newByteChannel(filePath,
+                                    EnumSet.of(StandardOpenOption.READ))) {
+                                long bytesRead = 0, fileSize = channel.size();
 
-                                buffer = channel.map(FileChannel.MapMode.READ_ONLY, bytesRead, bufSize);
-                                unpooled = Unpooled.buffer(bufSize + 1);
+                                while(bytesRead < fileSize) {
+                                    long bytesLeft = fileSize - bytesRead;
+                                    int bufSize = bytesLeft / BUF_SIZE > 0 ? BUF_SIZE : (int) bytesLeft;
 
-                                bytesRead += bufSize;
+                                    buffer = channel.map(FileChannel.MapMode.READ_ONLY, bytesRead, bufSize);
+                                    unpooled = Unpooled.buffer(bufSize + 1);
 
-                                unpooled.setByte(0, (bufSize == BUF_SIZE ? Command.RECEIVE_PART_OF_DOWNLOAD_FILE.getValue() :
-                                        Command.RECEIVE_END_PART_OF_DOWNLOAD_FILE.getValue()));
-                                unpooled.writerIndex(1);
-                                unpooled.writeBytes(buffer);
+                                    bytesRead += bufSize;
 
-                                sendMsg(ctx, unpooled);
+                                    unpooled.setByte(0, (bufSize == BUF_SIZE ? Command.RECEIVE_PART_OF_DOWNLOAD_FILE.getValue() :
+                                            Command.RECEIVE_END_PART_OF_DOWNLOAD_FILE.getValue()));
+                                    unpooled.writerIndex(1);
+                                    unpooled.writeBytes(buffer);
 
-                                buffer.clear();
-                                clearBuffer(unpooled);
+                                    sendMsg(ctx, unpooled);
+
+                                    buffer.clear();
+                                    clearBuffer(unpooled);
+                                }
+                            } finally {
+                                assert buffer != null;
+                                Cleaner cleaner = ((sun.nio.ch.DirectBuffer) buffer).cleaner();
+                                if (cleaner != null) {
+                                    cleaner.clean();
+                                }
                             }
                         }
-                    }
 
-                    break;
-                // Processing a client's file upload request
-                case RECEIVE_UPLOAD_FILE_DESCRIPTION:
-                    serverCloud.setActionFile(getUploadFileDescription());
-                    
-                    sendMsg(ctx, getReceiveUploadFileDescriptionMsg());
-                    
-                    break;
-                case RECEIVE_PART_OF_UPLOAD_FILE:
-                    writeFilePart(serverCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                        break;
+                    // Processing a client's file upload request
+                    case RECEIVE_UPLOAD_FILE_DESCRIPTION:
+                        serverCloud.setActionFile(getUploadFileDescription());
 
-                    break;
-                case RECEIVE_END_PART_OF_UPLOAD_FILE:
-                    writeFilePart(serverCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                        sendMsg(ctx, getReceiveUploadFileDescriptionMsg());
 
-                    serverCloud.setActionFile(null);
+                        break;
+                    case RECEIVE_PART_OF_UPLOAD_FILE:
+                        writeFilePart(serverCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
-                    sendMsg(ctx, getReceiveUploadFileEndMsg());
-                    // Extract current root directory
-                    currDirectory = serverCloud.getCurrentRoot();
-                    // Got a list of files contained in this path
-                    directoryTreeStructure = serverCloud.changeCurrentDirectoryTreeStructure(currDirectory)
-                            .getCurrentDirectoryTreeStructure();
-                    // Generated a byte array with a response
-                    ByteBuf updateDirStructureBeforeUploadFileMsg = getMsgBytesFromFilesList(directoryTreeStructure,
-                            Command.REQUEST_CLOUD_TREE_STRUCTURE);
-                    sendMsg(ctx, updateDirStructureBeforeUploadFileMsg);
-                    // Clear buffer
-                    resetBuffer();
+                        break;
+                    case RECEIVE_END_PART_OF_UPLOAD_FILE:
+                        writeFilePart(serverCloud.getActionFile(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
-                    break;
+                        serverCloud.setActionFile(null);
+
+                        sendMsg(ctx, getReceiveUploadFileEndMsg());
+                        // Extract current root directory
+                        currDirectory = serverCloud.getCurrentRoot();
+                        // Got a list of files contained in this path
+                        directoryTreeStructure = serverCloud.changeCurrentDirectoryTreeStructure(currDirectory)
+                                .getCurrentDirectoryTreeStructure();
+                        // Generated a byte array with a response
+                        ByteBuf updateDirStructureBeforeUploadFileMsg = getMsgBytesFromFilesList(directoryTreeStructure,
+                                Command.REQUEST_CLOUD_TREE_STRUCTURE);
+                        sendMsg(ctx, updateDirStructureBeforeUploadFileMsg);
+
+                        break;
+                }
             }
-        }
 
-        resetBuffer();
+            resetBuffer();
+        }
     }
 
     private void resetBuffer() {
         clearBuffer();
-        tmpBuf = ctx.alloc().buffer(BUF_SIZE);
+        tmpBuf = Unpooled.buffer(BUF_SIZE);
     }
 
     private void clearBuffer() {

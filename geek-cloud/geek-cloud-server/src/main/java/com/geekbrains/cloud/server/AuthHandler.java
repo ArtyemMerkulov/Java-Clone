@@ -9,9 +9,13 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+
+import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 
 public class AuthHandler extends ChannelInboundHandlerAdapter {
     private static final int BUF_SIZE = 131070;
@@ -51,19 +55,20 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
         } else if (tmpBuf.isReadable() && getCommandValue(tmpBuf) <= Command.maxValue()) {
             switch (Command.getCommandByValue(getCommandValue(tmpBuf))) {
                 case AUTH_DATA:
-                    User user = getUserData(tmpBuf);
+                    User recvUser = getUserData(tmpBuf);
                     User authUser = jdbcUserDAO.getByUserLoginAndPassword(
-                            user.getUserLogin(),
-                            user.getUserPassword()
+                            recvUser.getUserLogin(),
+                            recvUser.getUserPassword()
                     );
 
-                    System.out.println(user);
-                    System.out.println(authUser);
-
                     if (authUser != null) {
-                        sendMsg(getAuthMsg(Command.AUTH_OK));
                         isAuthorized = true;
                         channels.add(ctx.channel());
+
+                        ServerCloud serverCloud = new ServerCloud(authUser.getUserLogin());
+                        passToNextHandler(serverCloud);
+
+                        sendMsg(getAuthMsg(Command.AUTH_OK));
                     } else {
                         sendMsg(getAuthMsg(Command.AUTH_NOT_OK));
                     }
@@ -71,13 +76,22 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
                     break;
                 case REGISTRATION_DATA:
                     User regUser = getUserData(tmpBuf);
-                    System.out.println("REG: " + regUser);
 
-                    int isRegistered = jdbcUserDAO.insert(regUser);
+                    boolean isUserLoginExist = jdbcUserDAO.isUserLoginExist(regUser.getUserLogin());
 
-                    if (isRegistered == 1) {
+                    if (!isUserLoginExist) {
+                        jdbcUserDAO.insert(regUser);
+
+                        Path userDir = ServerCloud.getUserStoragePath()
+                                .resolve(Paths.get(regUser.getUserLogin()));
+
+                        Files.createDirectory(userDir);
+
+                        WatchService watchService = FileSystems.getDefault().newWatchService();
+                        userDir.register(watchService, ENTRY_DELETE);
+
                         sendMsg(getAuthMsg(Command.REGISTRATION_OK));
-                    } else if (isRegistered == 0) {
+                    } else {
                         sendMsg(getAuthMsg(Command.REGISTRATION_NOT_OK));
                     }
 
@@ -85,7 +99,7 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
             }
         }
 
-        tmpBuf.clear();
+        resetBuffer();
     }
 
     @Override
@@ -93,8 +107,8 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
         closeConnection();
     }
 
-    private void passToNextHandler(ByteBuf buf) {
-        ctx.fireChannelRead(buf);
+    private void passToNextHandler(Object obj) {
+        ctx.fireChannelRead(obj);
     }
 
     private User getUserData(ByteBuf tmpBuf) {
@@ -133,8 +147,19 @@ public class AuthHandler extends ChannelInboundHandlerAdapter {
 
     private void closeConnection() {
         isAuthorized = false;
-        tmpBuf.release();
+        clearBuffer();
         channels.remove(ctx.channel());
         connectionPool.returnConnectionInPool(connection);
+    }
+
+    private void resetBuffer() {
+        clearBuffer();
+        tmpBuf = Unpooled.buffer(BUF_SIZE);
+    }
+
+    private void clearBuffer() {
+        tmpBuf.clear();
+        tmpBuf.release();
+        tmpBuf = null;
     }
 }

@@ -57,8 +57,25 @@ public final class JDBCUserDAO extends DAO<User> {
         return null;
     }
 
+    public boolean isUserLoginExist(String userLogin) {
+        String query = "SELECT user_login_fld FROM users_tbl WHERE user_login_fld = ?";
+
+        try (PreparedStatement preparedStatement = connection.prepareStatement(query)) {
+            preparedStatement.setString(1, userLogin);
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                return resultSet.next();
+            }  catch (SQLException e) {
+                e.printStackTrace();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
     public User getByUserLoginAndPassword(String userLogin, String userPassword) {
-        System.out.println(userLogin + " " + userPassword);
         String query = "SELECT user_id, user_login_fld, user_password_fld " +
                 "FROM users_tbl " +
                 "WHERE user_login_fld = ? AND user_password_fld = ?";
@@ -68,9 +85,7 @@ public final class JDBCUserDAO extends DAO<User> {
             preparedStatement.setString(2, userPassword);
 
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                System.out.println(resultSet.getRow());
                 if (resultSet.next()) {
-                    System.out.println(resultSet.getRow());
                     return new User(
                             resultSet.getInt(1),
                             resultSet.getString(2),

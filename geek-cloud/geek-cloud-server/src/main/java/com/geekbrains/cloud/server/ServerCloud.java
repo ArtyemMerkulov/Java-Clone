@@ -6,15 +6,18 @@ import com.sun.istack.internal.NotNull;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class ServerCloud {
+public class ServerCloud implements Serializable {
 
-    private static final FileDescription cloudRoot = new FileDescription(Paths.get(new File("").getAbsolutePath()), Type.DIRECTORY);
+    private static final Path USER_STORAGE_PATH = Paths.get(new File("").getAbsolutePath(),"storage");
+
+    private static FileDescription cloudRoot;
 
     private FileDescription currentRoot;
 
@@ -22,7 +25,8 @@ public class ServerCloud {
 
     private List<FileDescription> currentDirectoryTreeStructure;
 
-    public ServerCloud() {
+    public ServerCloud(String userLogin) {
+        cloudRoot =  new FileDescription(USER_STORAGE_PATH.resolve(Paths.get(userLogin)), Type.DIRECTORY);
         currentRoot = null;
         actionFile = null;
         try {
@@ -82,5 +86,18 @@ public class ServerCloud {
 
     public FileDescription getActionFile() {
         return actionFile;
+    }
+
+    @Override
+    public String toString() {
+        return "ServerCloud{" +
+                "currentRoot=" + currentRoot +
+                ", actionFile=" + actionFile +
+                ", currentDirectoryTreeStructure=" + currentDirectoryTreeStructure +
+                '}';
+    }
+
+    public static Path getUserStoragePath() {
+        return USER_STORAGE_PATH;
     }
 }

@@ -54,11 +54,6 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         tmpBuf.writeBytes((ByteBuf) msg);
 
-        byte[] t1 = new byte[tmpBuf.readableBytes()];
-        tmpBuf.readBytes(t1);
-        tmpBuf.resetReaderIndex();
-        System.out.println(Arrays.toString(t1));
-
         if (tmpBuf.isReadable() && getCommandValue(tmpBuf) <= Command.maxValue()) {
             switch (Command.getCommandByValue(getCommandValue(tmpBuf))) {
                 case AUTH_OK:
@@ -67,6 +62,12 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
                     break;
                 case AUTH_NOT_OK:
                     clientCloud.setAuthorized(Command.AUTH_NOT_OK);
+                    break;
+                case REGISTRATION_OK:
+                    clientCloud.setRegistrationMessage(Command.REGISTRATION_OK);
+                    break;
+                case REGISTRATION_NOT_OK:
+                    clientCloud.setRegistrationMessage(Command.REGISTRATION_NOT_OK);
                     break;
                 case REQUEST_CLOUD_TREE_STRUCTURE:
                     if (clientCloud.isAuthorized() == 1) {

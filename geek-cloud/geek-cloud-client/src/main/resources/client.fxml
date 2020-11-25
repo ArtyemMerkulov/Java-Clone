@@ -5,8 +5,10 @@
     <VBox fx:id="authPane" alignment="CENTER" VBox.vgrow="ALWAYS">
         <Label VBox.vgrow="ALWAYS">Форма авторизации</Label>
 
+        <Label fx:id="regAnswer" VBox.vgrow="ALWAYS" visible="false"/>
+
         <TextField fx:id="loginField" VBox.vgrow="ALWAYS" maxWidth="250" promptText="Enter your login"/>
-        <TextField fx:id="passwordField" VBox.vgrow="ALWAYS" maxWidth="250" promptText="Enter your password"/>
+        <PasswordField fx:id="passwordField" VBox.vgrow="ALWAYS" maxWidth="250" promptText="Enter your password" />
 
         <Button fx:id="signIn" onAction="#signIn" text="Sign In" prefWidth="75" VBox.vgrow="ALWAYS"/>
         <Button fx:id="signUp" onAction="#signUp" text="Sign Up" prefWidth="75" VBox.vgrow="ALWAYS"/>

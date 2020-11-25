@@ -8,10 +8,7 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
@@ -77,10 +74,13 @@ public class Controller implements Initializable {
     private Button upload;
 
     @FXML
+    public Label regAnswer;
+
+    @FXML
     public TextField loginField;
 
     @FXML
-    public TextField passwordField;
+    public PasswordField passwordField;
 
     @FXML
     public Button signIn;
@@ -99,22 +99,39 @@ public class Controller implements Initializable {
 
     @FXML
     public void signIn() {
+        clearRegAnswer();
+
         String userLogin = loginField.getText();
         String userPassword = DigestUtils.md5Hex(passwordField.getText());
 
         clientNetwork.sendAuthData(userLogin, userPassword);
 
+        waitResponse(2000);
+
+        if (clientCloud.isAuthorized() == 1) {
+            getDefaultRemoteDirectory();
+            getDefaultLocalDirectory();
+
+            stage.getChildren().remove(0);
+            mainBox.setVisible(true);
+        } else if (clientCloud.isAuthorized() == -1) {
+            setRegAnswer("Login or password is incorrect!");
+        }
+    }
+
+    @FXML
+    public void signUp() {
+        clearRegAnswer();
+
+        String userLogin = loginField.getText();
+        String userPassword = DigestUtils.md5Hex(passwordField.getText());
+
+        clientNetwork.sendRegData(userLogin, userPassword);
+
         while(true) {
-            if (clientCloud.isAuthorized() == 1) {
-                System.out.println(clientCloud.isAuthorized());
-                getDefaultRemoteDirectory();
-                getDefaultLocalDirectory();
-
-                stage.getChildren().remove(0);
-                mainBox.setVisible(true);
-
-                break;
-            } else if (clientCloud.isAuthorized() == -1) {
+            if (clientCloud.getRegistrationMessage() != null) {
+                setRegAnswer(clientCloud.getRegistrationMessage());
+                clientCloud.setRegistrationMessage(null);
                 break;
             }
 
@@ -122,12 +139,14 @@ public class Controller implements Initializable {
         }
     }
 
-    @FXML
-    public void signUp() {
-        String userLogin = loginField.getText();
-        String userPassword = DigestUtils.md5Hex(passwordField.getText());
+    private void clearRegAnswer() {
+        regAnswer.setText(null);
+        regAnswer.setVisible(false);
+    }
 
-        clientNetwork.sendRegData(userLogin, userPassword);
+    private void setRegAnswer(String msg) {
+        regAnswer.setText(msg);
+        regAnswer.setVisible(true);
     }
 
     private void getDefaultRemoteDirectory() {
