@@ -1,0 +1,73 @@
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox fx:id="stage" fx:controller="com.geekbrains.cloud.client.Controller" xmlns:fx="http://javafx.com/fxml">
+    <VBox fx:id="authPane" alignment="CENTER" VBox.vgrow="ALWAYS">
+        <Label VBox.vgrow="ALWAYS">Форма авторизации</Label>
+
+        <Label fx:id="regAnswer" VBox.vgrow="ALWAYS" visible="false"/>
+
+        <TextField fx:id="loginField" VBox.vgrow="ALWAYS" maxWidth="250" promptText="Enter your login"/>
+        <PasswordField fx:id="passwordField" VBox.vgrow="ALWAYS" maxWidth="250" promptText="Enter your password" />
+
+        <Button fx:id="signIn" onAction="#signIn" text="Sign In" prefWidth="75" VBox.vgrow="ALWAYS"/>
+        <Button fx:id="signUp" onAction="#signUp" text="Sign Up" prefWidth="75" VBox.vgrow="ALWAYS"/>
+    </VBox>
+
+    <HBox fx:id="mainBox" VBox.vgrow="ALWAYS" visible="false" >
+        <VBox HBox.hgrow="ALWAYS" prefWidth="200">
+            <Label VBox.vgrow="ALWAYS">Удаленное хранилище</Label>
+
+            <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
+
+            <ScrollPane fx:id="remoteTreeScroll" VBox.vgrow="ALWAYS" vbarPolicy="AS_NEEDED" hbarPolicy="AS_NEEDED"/>
+
+            <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
+
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Имя файла: </Label>
+                <Label fx:id="remoteFileName" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Размер, KB: </Label>
+                <Label fx:id="remoteFileSize" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Время создания: </Label>
+                <Label fx:id="remoteFileCreationTime" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+        </VBox>
+
+        <Pane prefWidth="1" style="-fx-background-color: black;"/>
+
+        <VBox alignment="CENTER" prefWidth="100">
+            <Button fx:id="download" onAction="#downloadFile" text="Download" prefWidth="75" VBox.vgrow="ALWAYS"></Button>
+            <Button fx:id="upload" onAction="#uploadFile" text="Upload" prefWidth="75" VBox.vgrow="ALWAYS"></Button>
+        </VBox>
+
+        <Pane prefWidth="1" style="-fx-background-color: black;"/>
+
+        <VBox HBox.hgrow="ALWAYS" prefWidth="200">
+            <Label VBox.vgrow="ALWAYS">Локальное хранилище</Label>
+
+            <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
+
+            <ScrollPane fx:id="localTreeScroll" VBox.vgrow="ALWAYS" vbarPolicy="AS_NEEDED" hbarPolicy="AS_NEEDED"/>
+
+            <Pane VBox.vgrow="ALWAYS" maxHeight="1" style="-fx-background-color: black;"/>
+
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Имя файла: </Label>
+                <Label fx:id="localFileName" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Размер, KB: </Label>
+                <Label fx:id="localFileSize" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+            <Pane>
+                <Label VBox.vgrow="ALWAYS">Время создания: </Label>
+                <Label fx:id="localFileCreationTime" VBox.vgrow="ALWAYS"></Label>
+            </Pane>
+        </VBox>
+    </HBox>
+</VBox>
