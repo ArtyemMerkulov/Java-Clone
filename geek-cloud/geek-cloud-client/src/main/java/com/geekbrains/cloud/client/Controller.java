@@ -1,17 +1,18 @@
 package com.geekbrains.cloud.client;
 
+import com.geekbrains.cloud.FileDescription;
+import com.geekbrains.cloud.Type;
 import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
+import javafx.scene.control.*;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import org.apache.commons.codec.digest.DigestUtils;
 
 import java.net.URL;
 import java.nio.file.Path;
@@ -21,23 +22,44 @@ import java.util.ResourceBundle;
 
 public class Controller implements Initializable {
 
-    private ClientNetwork clientNetwork;
+    private static final int ROOT_FILE_PANE_LAYOUT_X = 0;
 
-    private ClientCloud clientCloud;
+    private static final int ROOT_FILE_IMG_LAYOUT_X = 0;
+
+    private static final int ROOT_FILE_LABEL_LAYOUT_X = 20;
+
+    private static final int CHILD_FILE_PANE_LAYOUT_X = 20;
+
+    private static final int CHILD_FILE_IMG_LAYOUT_X = 20;
+
+    private static final int CHILD_FILE_LABEL_LAYOUT_X = 40;
+
+    private final ClientNetwork clientNetwork = new ClientNetwork();
+
+    private final ClientCloud clientCloud = clientNetwork.getClientCloud();
 
     private int nClicked = 0;
 
     private FileDescription selectedObject;
 
-    private FileDescription currentLocalDirectory;
+    private FileDescription currentLocalRoot;
 
-    private FileDescription currentRemoteDirectory;
+    private FileDescription currentRemoteRoot;
+
+    private List<FileDescription> currentLocalRootFiles;
+
+    private List<FileDescription> currentRemoteRootFiles;
 
     private Label selectedLabel;
 
-    private int currLocalLvl = 0;
+    @FXML
+    public VBox stage;
 
-    private int currRemoteLvl = 0;
+    @FXML
+    public Pane authPane;
+
+    @FXML
+    public HBox mainBox;
 
     @FXML
     private ScrollPane remoteTreeScroll;
@@ -51,19 +73,22 @@ public class Controller implements Initializable {
     @FXML
     private Button upload;
 
-    @Override
-    public synchronized void initialize(URL location, ResourceBundle resources) {
-        clientNetwork = new ClientNetwork();
-        do {
-            clientCloud = clientNetwork.getClientCloud();
-        } while (clientCloud == null);
+    @FXML
+    public Label regAnswer;
 
-        while (!clientCloud.getStart()) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+    @FXML
+    public TextField loginField;
+
+    @FXML
+    public PasswordField passwordField;
+
+    @FXML
+    public Button signIn;
+
+    @Override
+    public void initialize(URL location, ResourceBundle resources) {
+        while (!clientCloud.isStart()) {
+            waitResponse(50);
         }
     }
 
@@ -73,36 +98,87 @@ public class Controller implements Initializable {
     }
 
     @FXML
-    public void getRemoteFolderTreeStructure() {
-        drawTreeStructure(clientCloud.getRemoteTreeStructure(), remoteTreeScroll, "root", 0);
+    public void signIn() {
+        clearRegAnswer();
+
+        String userLogin = loginField.getText();
+        String userPassword = DigestUtils.md5Hex(passwordField.getText());
+
+        clientNetwork.sendAuthData(userLogin, userPassword);
+
+        waitResponse(2000);
+
+        if (clientCloud.isAuthorized() == 1) {
+            getDefaultRemoteDirectory();
+            getDefaultLocalDirectory();
+
+            stage.getChildren().remove(0);
+            mainBox.setVisible(true);
+        } else if (clientCloud.isAuthorized() == -1) {
+            setRegAnswer("Login or password is incorrect!");
+        }
     }
 
     @FXML
-    public void getLocalFolderTreeStructure() {
-        drawTreeStructure(clientCloud.getLocalTreeStructure(), localTreeScroll, "root", 0);
+    public void signUp() {
+        clearRegAnswer();
+
+        String userLogin = loginField.getText();
+        String userPassword = DigestUtils.md5Hex(passwordField.getText());
+
+        clientNetwork.sendRegData(userLogin, userPassword);
+
+        while(true) {
+            if (clientCloud.getRegistrationMessage() != null) {
+                setRegAnswer(clientCloud.getRegistrationMessage());
+                clientCloud.setRegistrationMessage(null);
+                break;
+            }
+
+            waitResponse(50);
+        }
+    }
+
+    private void clearRegAnswer() {
+        regAnswer.setText(null);
+        regAnswer.setVisible(false);
+    }
+
+    private void setRegAnswer(String msg) {
+        regAnswer.setText(msg);
+        regAnswer.setVisible(true);
+    }
+
+    private void getDefaultRemoteDirectory() {
+        currentRemoteRoot = ClientCloud.getRemoteCloudRoot();
+        currentRemoteRootFiles = clientCloud.getCurrentRemoteDirectoryFiles();
+
+        drawTreeStructure(currentRemoteRoot, currentRemoteRootFiles, remoteTreeScroll);
+    }
+
+    private void getDefaultLocalDirectory() {
+        currentLocalRoot = ClientCloud.getLocalCloudRoot();
+        currentLocalRootFiles = clientCloud.getCurrentLocalDirectoryFiles();
+
+        drawTreeStructure(currentLocalRoot, currentLocalRootFiles, localTreeScroll);
     }
 
     @FXML
-    private void drawTreeStructure(FilesTree filesTree, ScrollPane scrollPane, String name, int lvl) {
-        FileDescription root;
-        if (name.equals("root")) root = new FileDescription();
-        else root = filesTree.getFolder(name, lvl);
-
-        if (root == null) return;
-
+    private void drawTreeStructure(FileDescription root, List<FileDescription> files, ScrollPane scrollPane) {
         VBox container = new VBox();
         ObservableList<Node> containerChildren = container.getChildren();
 
         containerChildren.clear();
 
-        containerChildren.add(makeFileInTree(filesTree, scrollPane, root,
-                lvl, -1, 0, 0, 15));
+        Pane rootFilePane = makeFilePane(root, scrollPane, ROOT_FILE_PANE_LAYOUT_X, ROOT_FILE_IMG_LAYOUT_X,
+                ROOT_FILE_LABEL_LAYOUT_X);
+        containerChildren.add(rootFilePane);
 
-        List<FileDescription> filesList = filesTree.getFilesList(name, lvl);
-
-        for (FileDescription fd : filesList)
-            containerChildren.add(makeFileInTree(filesTree, scrollPane, fd,
-                    lvl,1, 50, 15, 30));
+        for (FileDescription file : files) {
+            Pane childrenFilePane = makeFilePane(file, scrollPane, CHILD_FILE_PANE_LAYOUT_X, CHILD_FILE_IMG_LAYOUT_X,
+                    CHILD_FILE_LABEL_LAYOUT_X);
+            containerChildren.add(childrenFilePane);
+        }
 
         scrollPane.setContent(container);
         scrollPane.setPrefViewportHeight(0);
@@ -110,63 +186,69 @@ public class Controller implements Initializable {
         scrollPane.setPannable(true);
     }
 
-    private Pane makeFileInTree(FilesTree filesTree, ScrollPane scrollPane, FileDescription fd,
-                                int lvl, int stepDirection, int paneLX, int imgLX, int labelLX) {
+    private Pane makeFilePane(FileDescription file, ScrollPane scrollPane,
+                              int paneLayoutX, int imageLayoutX, int labelLayoutX) {
         Pane filePane = new Pane();
         ObservableList<Node> filePaneChildren = filePane.getChildren();
 
-        filePane.setLayoutX(paneLX);
+        filePane.setLayoutX(paneLayoutX);
 
-        ImageView imageView = new ImageView(getImageUrlForFile(fd));
+        String imageURL = getImageUrl(file);
+        ImageView imageView = new ImageView(imageURL);
 
-        imageView.setLayoutX(imgLX);
+        imageView.setLayoutX(imageLayoutX);
 
-        Label label = new Label(fd.getName());
+        String fileName;
+        if (file.getPath().equals(Paths.get(""))) fileName = " root";
+        else fileName = file.getFileName();
+        Label label = new Label(fileName);
 
-        label.setLayoutX(labelLX);
+        label.setLayoutX(labelLayoutX);
 
-        if (!fd.getName().equals("root")) {
+        if (!file.equals(ClientCloud.getRemoteCloudRoot())) {
             label.setOnMouseClicked(event -> {
                 nClicked += 1;
-
-                if (nClicked == 2 && fd.getType() == Type.FOLDER && fd.getName().equals(selectedObject.getName())) {
-                    nClicked = 0;
-
-                    if (scrollPane.equals(localTreeScroll) && label.getLayoutX() == 15) {
-                        currLocalLvl -= 1;
-                    }
-                    else if (scrollPane.equals(remoteTreeScroll) && label.getLayoutX() == 15) {
-                        currRemoteLvl -= 1;
-                    }
-                    else if (scrollPane.equals(localTreeScroll) && label.getLayoutX() == 30) {
-                        currLocalLvl += 1;
-                        currentLocalDirectory = new FileDescription(selectedObject);
-                    }
-                    else if (scrollPane.equals(remoteTreeScroll) && label.getLayoutX() == 30) {
-                        currRemoteLvl += 1;
-                        currentRemoteDirectory = new FileDescription(selectedObject);
-                    }
-
-                    selectedObject = null;
-
-                    drawTreeStructure(filesTree, scrollPane,
-                            stepDirection == -1 ? filesTree.getElement(lvl - 1, fd.getLink()).getName() : fd.getName(),
-                            lvl + stepDirection);
-                } else if (nClicked == 2 && selectedObject != null &&
-                        (fd.getType() == Type.FILE || !fd.getName().equals(selectedObject.getName()))) {
-                    selectedLabel.setBackground(null);
-                    selectedObject = null;
-                    selectedLabel = null;
-                }
-
-                if (nClicked > 2) nClicked = 1;
-
+                // If file was selected
                 if (nClicked == 1) {
                     label.setBackground(new Background(new BackgroundFill(Color.CORNFLOWERBLUE, CornerRadii.EMPTY, Insets.EMPTY)));
                     selectedLabel = label;
-                    selectedObject = fd;
+                    selectedObject = file;
+
+                    clientCloud.setActionFile(file);
+
+                    if (scrollPane.equals(localTreeScroll)) {
+                        download.setDisable(true);
+                        upload.setDisable(false);
+                    } else if (scrollPane.equals(remoteTreeScroll)) {
+                        download.setDisable(false);
+                        upload.setDisable(true);
+                    }
+                } // If the file is a directory, then go to a level lower or higher
+                else if (nClicked == 2 && file.getType() == Type.DIRECTORY && file.equals(selectedObject)) {
+                    nClicked = 0;
+                    selectedObject = null;
+                    // If selected object in local repository and root, then go up
+                    if (scrollPane.equals(localTreeScroll) && file.equals(clientCloud.getCurrentLocalDirectory())) {
+                        setLocalDirectoryParams(file.getPath().getParent(), file.getType());
+                    } // If selected object in local repository and not root, then go down
+                    else if (scrollPane.equals(localTreeScroll) && !file.equals(clientCloud.getCurrentLocalDirectory())) {
+                        setLocalDirectoryParams(currentLocalRoot.getPath().resolve(file.getPath()), file.getType());
+                    } // If selected object in remote repository and root, then go up
+                    else if (scrollPane.equals(remoteTreeScroll) && file.equals(clientCloud.getCurrentRemoteDirectory())) {
+                        Path parentPath = file.getPath().getParent();
+                        setRemoteDirectoryParams(file, parentPath != null ? parentPath : Paths.get(""), file.getType());
+                    } // If selected object in remote repository and not root, then go down
+                    else if (scrollPane.equals(remoteTreeScroll) && !file.equals(clientCloud.getCurrentRemoteDirectory())) {
+                        setRemoteDirectoryParams(file, file.getPath(), file.getType());
+                    }
+                } else if (nClicked == 2 && selectedObject != null && (file.getType() == Type.FILE || !file.equals(selectedObject))) {
+                    nClicked = 0;
+                    disableSelectedObject();
                 }
 
+                if (nClicked > 2) nClicked = 0;
+
+                clientCloud.setDirectoryStructureReceived(false);
             });
         }
 
@@ -176,37 +258,107 @@ public class Controller implements Initializable {
         return filePane;
     }
 
+    private void disableSelectedObject() {
+        selectedObject = null;
+        selectedLabel.setBackground(null);
+        selectedLabel = null;
+    }
+
+    private void setLocalDirectoryParams(Path path, Type type) {
+        FileDescription newRoot = new FileDescription(path, type);
+
+        clientCloud.changeCurrentLocalDirectory(newRoot);
+
+        List<FileDescription> filesInRoot = clientCloud.getCurrentLocalDirectoryFiles();
+        ScrollPane variablePanel = localTreeScroll;
+
+        currentLocalRoot = newRoot;
+        currentLocalRootFiles = filesInRoot;
+
+        drawTreeStructure(newRoot, filesInRoot, variablePanel);
+    }
+
+    private void setRemoteDirectoryParams(FileDescription srcFile, Path newPath, Type newType) {
+        clientNetwork.getRemoteDirectoryTreeStructure(srcFile);
+
+        FileDescription newRoot = new FileDescription(newPath, newType);
+
+        clientCloud.setActionFile(newRoot);
+        while(!clientCloud.isDirectoryStructureReceived()) {
+            waitResponse(50);
+        }
+
+        List<FileDescription> filesInRoot = clientCloud.getCurrentRemoteDirectoryFiles();
+
+        ScrollPane variablePanel = remoteTreeScroll;
+
+        currentRemoteRoot = newRoot;
+        currentRemoteRootFiles = filesInRoot;
+
+        drawTreeStructure(newRoot, filesInRoot, variablePanel);
+    }
+
     @FXML
     private void downloadFile() {
-        if (selectedObject != null && selectedLabel != null) {
-            Path actionFilePath = ClientCloud.getLocalCloudPath()
-                    .resolve(clientCloud.getLocalTreeStructure()
-                            .getPath(currentLocalDirectory, currLocalLvl - 1)
-                            .resolve(Paths.get(selectedObject.getName())));
+        if (selectedObject != null) {
+            clientNetwork.requestDownloadFile(selectedObject);
+            disableSelectedObject();
 
-            clientCloud.setActionFilePath(actionFilePath);
-            clientNetwork.requestDownloadFile(selectedObject, currRemoteLvl);
-        }
+            while (true) {
+                if (clientCloud.isFileReceived()) {
+                    clientCloud.changeCurrentLocalDirectory(currentLocalRoot);
 
-        while (true) {
-            if (clientCloud.isFileReceived()) {
-                drawTreeStructure(clientCloud.getLocalTreeStructure(), localTreeScroll,
-                        selectedObject.getName(), currLocalLvl);
-                clientCloud.setFileReceived(false);
-                break;
+                    currentLocalRootFiles = clientCloud.getCurrentLocalDirectoryFiles();
+
+                    drawTreeStructure(currentLocalRoot, currentLocalRootFiles, localTreeScroll);
+                    clientCloud.setFileReceived(false);
+
+                    break;
+                }
             }
         }
-
-        clientCloud.setActionFilePath(null);
     }
 
     @FXML
     private void uploadFile() {
-        if (selectedObject != null && selectedLabel != null)
-            clientNetwork.requestUploadFile(selectedObject, currLocalLvl);
+        if (selectedObject != null) {
+            clientNetwork.sendUploadFileDescription(selectedObject);
+
+            while (true) {
+                if (clientCloud.isFileSent()) {
+                    FileDescription currentRemoteDir = clientCloud.getCurrentRemoteDirectory();
+
+                    clientCloud.setActionFile(currentRemoteDir);
+                    clientNetwork.getRemoteDirectoryTreeStructure(currentRemoteDir);
+
+                    while (true) {
+                        if (clientCloud.isDirectoryStructureReceived()) {
+                            drawTreeStructure(clientCloud.getCurrentRemoteDirectory(),
+                                    clientCloud.getCurrentRemoteDirectoryFiles(), remoteTreeScroll);
+
+                            break;
+                        }
+                    }
+
+                    disableSelectedObject();
+
+                    clientCloud.setFileSent(false);
+
+                    break;
+                }
+            }
+        }
     }
 
-    private String getImageUrlForFile(FileDescription fd) {
-        return fd.isFile() ? "img/file_icon.png" : "img/folder_icon.png";
+    private String getImageUrl(FileDescription file) {
+        return file.isFile() ? "img/file_icon.png" : "img/folder_icon.png";
+    }
+
+    private void waitResponse(int t) {
+        try {
+            Thread.sleep(t);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 }

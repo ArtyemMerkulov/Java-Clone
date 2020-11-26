@@ -1,23 +1,20 @@
-<?import javafx.scene.control.Label?>
-<?import javafx.scene.layout.VBox?>
-<?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 
-<?import javafx.scene.control.MenuBar?>
-<?import javafx.scene.control.Menu?>
-<?import javafx.scene.control.MenuItem?>
+<VBox fx:id="stage" fx:controller="com.geekbrains.cloud.client.Controller" xmlns:fx="http://javafx.com/fxml">
+    <VBox fx:id="authPane" alignment="CENTER" VBox.vgrow="ALWAYS">
+        <Label VBox.vgrow="ALWAYS">Форма авторизации</Label>
 
-<?import javafx.scene.control.ScrollPane?>
-<?import javafx.scene.control.ScrollBar?>
-<?import javafx.scene.control.Button?>
-<VBox fx:controller="com.geekbrains.cloud.client.Controller" xmlns:fx="http://javafx.com/fxml">
-<!--    <MenuBar>-->
-<!--        <Menu text="Опции">-->
-<!--            <MenuItem text="Обновить" onAction="#getRemoteFolderTreeStructure"/>-->
-<!--        </Menu>-->
-<!--    </MenuBar>-->
+        <Label fx:id="regAnswer" VBox.vgrow="ALWAYS" visible="false"/>
 
-    <HBox VBox.vgrow="ALWAYS">
+        <TextField fx:id="loginField" VBox.vgrow="ALWAYS" maxWidth="250" promptText="Enter your login"/>
+        <PasswordField fx:id="passwordField" VBox.vgrow="ALWAYS" maxWidth="250" promptText="Enter your password" />
+
+        <Button fx:id="signIn" onAction="#signIn" text="Sign In" prefWidth="75" VBox.vgrow="ALWAYS"/>
+        <Button fx:id="signUp" onAction="#signUp" text="Sign Up" prefWidth="75" VBox.vgrow="ALWAYS"/>
+    </VBox>
+
+    <HBox fx:id="mainBox" VBox.vgrow="ALWAYS" visible="false" >
         <VBox HBox.hgrow="ALWAYS" prefWidth="200">
             <Label VBox.vgrow="ALWAYS">Удаленное хранилище</Label>
 
@@ -43,7 +40,7 @@
 
         <Pane prefWidth="1" style="-fx-background-color: black;"/>
 
-        <VBox HBox.hgrow="ALWAYS" alignment="CENTER" prefWidth="100">
+        <VBox alignment="CENTER" prefWidth="100">
             <Button fx:id="download" onAction="#downloadFile" text="Download" prefWidth="75" VBox.vgrow="ALWAYS"></Button>
             <Button fx:id="upload" onAction="#uploadFile" text="Upload" prefWidth="75" VBox.vgrow="ALWAYS"></Button>
         </VBox>

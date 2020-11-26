@@ -1,86 +1,175 @@
 package com.geekbrains.cloud.client;
 
+import com.geekbrains.cloud.Command;
+import com.geekbrains.cloud.FileDescription;
+import com.geekbrains.cloud.Type;
+
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class ClientCloud {
 
-    private static final Path localCloudPath = Paths.get("C:\\Users\\surga\\OneDrive\\Рабочий стол\\Уроки\\Разработка сетевого хранилища на Java\\");
+    private static final FileDescription localCloudRoot = new FileDescription(Paths.get(new File("").getAbsolutePath()), Type.DIRECTORY);
 
-    private FilesTree remoteTree;
-    private FilesTree localTree;
+    private static final FileDescription remoteCloudRoot = new FileDescription(Paths.get(""), Type.DIRECTORY);
 
-    private boolean start = false;
+    private FileDescription actionFile;
 
-    private Path actionFilePath;
+    private FileDescription currentLocalDirectory;
 
-    private boolean fileReceived;
+    private FileDescription currentRemoteDirectory;
+
+    private List<FileDescription> currentLocalDirectoryFiles;
+
+    private List<FileDescription> currentRemoteDirectoryFiles;
+
+    private boolean isStart;
+
+    private volatile boolean isFileReceived;
+
+    private volatile boolean isFileSent;
+
+    private volatile boolean isDirectoryStructureReceived;
+
+    private volatile Command authCommand;
+
+    private volatile String regAnswer;
 
     public ClientCloud() {
-        remoteTree = new FilesTree();
+        isStart = false;
+        isFileReceived = false;
+        isFileSent = false;
+        isDirectoryStructureReceived = false;
+        authCommand = null;
+        regAnswer = null;
+        actionFile = remoteCloudRoot;
+        changeCurrentLocalDirectory(localCloudRoot);
+        changeCurrentRemoteDirectory(remoteCloudRoot, new ArrayList<>());
+    }
+
+    public FileDescription getCurrentLocalDirectory() {
+        return currentLocalDirectory;
+    }
+
+    public FileDescription getCurrentRemoteDirectory() {
+        return currentRemoteDirectory;
+    }
+
+    public ClientCloud changeCurrentLocalDirectory(FileDescription newRootDirectory) {
+        currentLocalDirectory = new FileDescription(newRootDirectory);
         try {
-            localTree = new FilesTree(initLocalFolderTreeStructure(localCloudPath));
+            currentLocalDirectoryFiles = getFilesOnPath(currentLocalDirectory.getPath());
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        return this;
     }
 
-    public Path getActionFilePath() {
-        return actionFilePath;
+    public ClientCloud changeCurrentRemoteDirectory(FileDescription newRootDirectory,
+                                                    List<FileDescription> remotePathFiles) {
+        currentRemoteDirectory = new FileDescription(newRootDirectory);
+        currentRemoteDirectoryFiles = remotePathFiles;
+
+        return this;
     }
 
-    private List<Path> initLocalFolderTreeStructure(Path path) throws IOException {
-        return Files.walk(path)
-                .filter(Files::isRegularFile)
+    private List<FileDescription> getFilesOnPath(Path path) throws IOException {
+        if (!Files.isDirectory(path))
+            throw new IllegalArgumentException("File in this path is not a directory.");
+        return Files.walk(path, 1)
                 .map(path::relativize)
+                .skip(1)
+                .map(p -> new FileDescription(p, Files.isDirectory(Paths.get(currentLocalDirectory.getPath()
+                        .toString(), p.toString())) ? Type.DIRECTORY : Type.FILE))
                 .collect(Collectors.toList());
     }
 
-    public FilesTree getLocalTreeStructure() {
-        return localTree;
+    public List<FileDescription> getCurrentLocalDirectoryFiles() {
+        return currentLocalDirectoryFiles;
     }
 
-    public void setLocalTreeStructure(List<Path> localPathsList) {
-        localTree = new FilesTree(localPathsList);
+    public List<FileDescription> getCurrentRemoteDirectoryFiles() {
+        return currentRemoteDirectoryFiles;
     }
 
-    public void setRemoteTreeStructure(List<Path> remotePathsList) {
-        remoteTree = new FilesTree(remotePathsList);
+    public static FileDescription getLocalCloudRoot() {
+        return localCloudRoot;
     }
 
-    public FilesTree getRemoteTreeStructure() {
-        return remoteTree;
+    public static FileDescription getRemoteCloudRoot() {
+        return remoteCloudRoot;
     }
 
-    public void setStart(boolean start) {
-        this.start = start;
+    public FileDescription getActionFile() {
+        return actionFile;
     }
 
-    public boolean getStart() {
-        return start;
+    public void setActionFile(FileDescription actionFile) {
+        this.actionFile = new FileDescription(actionFile);
     }
 
-    public static Path getFullPath(FilesTree filesTree, FileDescription file, int lvl) {
-        return filesTree.getPath(file, lvl);
+    public boolean isStart() {
+        return isStart;
     }
 
-    public void setFileReceived(boolean fileReceived) {
-        this.fileReceived = fileReceived;
+    public void setIsStart(boolean isStart) {
+        this.isStart = isStart;
+    }
+
+    public void setFileReceived(boolean isFileReceived) {
+        this.isFileReceived = isFileReceived;
     }
 
     public boolean isFileReceived() {
-        return fileReceived;
+        return isFileReceived;
     }
 
-    public void setActionFilePath(Path path) {
-        actionFilePath = path;
+    public void setDirectoryStructureReceived(boolean isDirectoryStructureReceived) {
+        this.isDirectoryStructureReceived = isDirectoryStructureReceived;
     }
 
-    public static Path getLocalCloudPath() {
-        return localCloudPath;
+    public boolean isDirectoryStructureReceived() {
+        return isDirectoryStructureReceived;
+    }
+
+    public boolean isFileSent() {
+        return isFileSent;
+    }
+
+    public void setFileSent(boolean isFileSent) {
+        this.isFileSent = isFileSent;
+    }
+
+    public void setAuthorized(Command authCommand) {
+        this.authCommand = authCommand;
+    }
+
+    public int isAuthorized() {
+        if (authCommand == Command.AUTH_OK) {
+            return 1;
+        } else if (authCommand == Command.AUTH_NOT_OK) {
+            return -1;
+        } else return 0;
+    }
+
+    public void setRegistrationMessage(Command registrationMessage) {
+        if (registrationMessage == Command.REGISTRATION_OK) {
+            this.regAnswer = "Your are registered!";
+        } else if (registrationMessage == Command.REGISTRATION_NOT_OK) {
+            this.regAnswer = "Registration failed!";
+        } else if (registrationMessage == null){
+            this.regAnswer = null;
+        }
+    }
+
+    public String getRegistrationMessage() {
+        return regAnswer;
     }
 }

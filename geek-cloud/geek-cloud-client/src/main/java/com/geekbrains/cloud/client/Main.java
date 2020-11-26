@@ -10,16 +10,14 @@ public class Main extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
-        FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource("/client.fxml"));
-        Parent root = fxmlLoader.load();
-        Controller controller = fxmlLoader.getController();
-        primaryStage.setScene(new Scene(root, 550, 500));
+        FXMLLoader fxmlLoaderMainController = new FXMLLoader(getClass().getResource("/client.fxml"));
+        Parent MainRoot = fxmlLoaderMainController.load();
+        Controller mainController = fxmlLoaderMainController.getController();
+
+        primaryStage.setScene(new Scene(MainRoot, 550, 500));
         primaryStage.setTitle("Geek Cloud Client");
-        primaryStage.setOnCloseRequest(event -> controller.exitAction());
-        primaryStage.setOnShowing(event -> {
-            controller.getRemoteFolderTreeStructure();
-            controller.getLocalFolderTreeStructure();
-        });
+        primaryStage.setOnCloseRequest(event -> mainController.exitAction());
+
         primaryStage.show();
     }
 
