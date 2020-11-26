@@ -4,7 +4,6 @@ import com.geekbrains.cloud.Command;
 import com.geekbrains.cloud.FileDescription;
 import com.geekbrains.cloud.Type;
 import com.geekbrains.cloud.Utils;
-import com.sun.istack.internal.NotNull;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -19,7 +18,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 
@@ -176,7 +174,6 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    @NotNull
     private List<FileDescription> getFilesDescriptionsFromRequest() {
         List<FileDescription> pathsList = new ArrayList<>();
 
@@ -196,12 +193,11 @@ public class ClientMainHandler extends ChannelInboundHandlerAdapter {
         return pathsList;
     }
 
-    @NotNull
-    private Path getPathFromBytes(@NotNull byte[] bytes) {
+    private Path getPathFromBytes(byte[] bytes) {
         return Paths.get(new String(bytes, StandardCharsets.UTF_8));
     }
 
-    private byte getCommandValue(@NotNull ByteBuf command) {
+    private byte getCommandValue(ByteBuf command) {
         return command.getByte(0);
     }
 

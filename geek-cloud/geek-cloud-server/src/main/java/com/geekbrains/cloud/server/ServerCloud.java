@@ -2,7 +2,6 @@ package com.geekbrains.cloud.server;
 
 import com.geekbrains.cloud.FileDescription;
 import com.geekbrains.cloud.Type;
-import com.sun.istack.internal.NotNull;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,7 +39,7 @@ public class ServerCloud implements Serializable {
         return currentRoot;
     }
 
-    public ServerCloud changeCurrentDirectoryTreeStructure(@NotNull FileDescription newCurrRoot) {
+    public ServerCloud changeCurrentDirectoryTreeStructure(FileDescription newCurrRoot) {
         if (!newCurrRoot.equals(currentRoot) || (newCurrRoot.getPath().equals(Paths.get("")) &&
                 currentRoot != null && currentRoot.equals(newCurrRoot))) {
             currentRoot = new FileDescription(newCurrRoot);
@@ -58,8 +57,7 @@ public class ServerCloud implements Serializable {
         return this;
     }
 
-    @NotNull
-    private List<FileDescription> getFilesOnPath(@NotNull Path path) throws IOException {
+    private List<FileDescription> getFilesOnPath(Path path) throws IOException {
         if (!Files.isDirectory(path))
             throw new IllegalArgumentException("File in this path is not a directory.");
         return Files.walk(path, 1)
@@ -70,12 +68,10 @@ public class ServerCloud implements Serializable {
                 .collect(Collectors.toList());
     }
 
-    @NotNull
     public List<FileDescription> getCurrentDirectoryTreeStructure() {
         return currentDirectoryTreeStructure;
     }
 
-    @NotNull
     public static Path getCloudRootPath() {
         return cloudRoot.getPath();
     }
@@ -88,6 +84,10 @@ public class ServerCloud implements Serializable {
         return actionFile;
     }
 
+    public static Path getUserStoragePath() {
+        return USER_STORAGE_PATH;
+    }
+
     @Override
     public String toString() {
         return "ServerCloud{" +
@@ -95,9 +95,5 @@ public class ServerCloud implements Serializable {
                 ", actionFile=" + actionFile +
                 ", currentDirectoryTreeStructure=" + currentDirectoryTreeStructure +
                 '}';
-    }
-
-    public static Path getUserStoragePath() {
-        return USER_STORAGE_PATH;
     }
 }

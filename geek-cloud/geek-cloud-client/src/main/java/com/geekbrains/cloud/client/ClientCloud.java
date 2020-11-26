@@ -3,7 +3,6 @@ package com.geekbrains.cloud.client;
 import com.geekbrains.cloud.Command;
 import com.geekbrains.cloud.FileDescription;
 import com.geekbrains.cloud.Type;
-import com.sun.istack.internal.NotNull;
 
 import java.io.File;
 import java.io.IOException;
@@ -54,17 +53,15 @@ public class ClientCloud {
         changeCurrentRemoteDirectory(remoteCloudRoot, new ArrayList<>());
     }
 
-    @NotNull
     public FileDescription getCurrentLocalDirectory() {
         return currentLocalDirectory;
     }
 
-    @NotNull
     public FileDescription getCurrentRemoteDirectory() {
         return currentRemoteDirectory;
     }
 
-    public ClientCloud changeCurrentLocalDirectory(@NotNull FileDescription newRootDirectory) {
+    public ClientCloud changeCurrentLocalDirectory(FileDescription newRootDirectory) {
         currentLocalDirectory = new FileDescription(newRootDirectory);
         try {
             currentLocalDirectoryFiles = getFilesOnPath(currentLocalDirectory.getPath());
@@ -75,7 +72,7 @@ public class ClientCloud {
         return this;
     }
 
-    public ClientCloud changeCurrentRemoteDirectory(@NotNull FileDescription newRootDirectory,
+    public ClientCloud changeCurrentRemoteDirectory(FileDescription newRootDirectory,
                                                     List<FileDescription> remotePathFiles) {
         currentRemoteDirectory = new FileDescription(newRootDirectory);
         currentRemoteDirectoryFiles = remotePathFiles;
@@ -83,8 +80,7 @@ public class ClientCloud {
         return this;
     }
 
-    @NotNull
-    private List<FileDescription> getFilesOnPath(@NotNull Path path) throws IOException {
+    private List<FileDescription> getFilesOnPath(Path path) throws IOException {
         if (!Files.isDirectory(path))
             throw new IllegalArgumentException("File in this path is not a directory.");
         return Files.walk(path, 1)
@@ -95,27 +91,22 @@ public class ClientCloud {
                 .collect(Collectors.toList());
     }
 
-    @NotNull
     public List<FileDescription> getCurrentLocalDirectoryFiles() {
         return currentLocalDirectoryFiles;
     }
 
-    @NotNull
     public List<FileDescription> getCurrentRemoteDirectoryFiles() {
         return currentRemoteDirectoryFiles;
     }
 
-    @NotNull
     public static FileDescription getLocalCloudRoot() {
         return localCloudRoot;
     }
 
-    @NotNull
     public static FileDescription getRemoteCloudRoot() {
         return remoteCloudRoot;
     }
 
-    @NotNull
     public FileDescription getActionFile() {
         return actionFile;
     }
@@ -124,7 +115,6 @@ public class ClientCloud {
         this.actionFile = new FileDescription(actionFile);
     }
 
-    @NotNull
     public boolean isStart() {
         return isStart;
     }

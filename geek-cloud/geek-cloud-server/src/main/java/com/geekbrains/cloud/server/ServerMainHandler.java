@@ -48,22 +48,18 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
             tmpBuf.writeBytes((ByteBuf) msg);
 
             if (tmpBuf.isReadable() && getCommandValue(tmpBuf) <= Command.maxValue()) {
-                // Got a request command
                 switch (Command.getCommandByValue(getCommandValue(tmpBuf))) {
-                    // Handling a client request for a directory structure
                     case REQUEST_CLOUD_TREE_STRUCTURE:
-                        // Extract request path and make file description
                         Path currDirectoryPath = getRequestCurrentDirectory(tmpBuf);
                         FileDescription currDirectory = new FileDescription(currDirectoryPath, Type.DIRECTORY);
-                        // Got a list of files contained in this path
+
                         List<FileDescription> directoryTreeStructure = serverCloud.changeCurrentDirectoryTreeStructure(currDirectory)
                                 .getCurrentDirectoryTreeStructure();
-                        // Generated a byte array with a response
+
                         ByteBuf responseMsg = getMsgBytesFromFilesList(directoryTreeStructure, Command.REQUEST_CLOUD_TREE_STRUCTURE);
                         sendMsg(ctx, responseMsg);
 
                         break;
-                    // Processing a client's file download request
                     case REQUEST_DOWNLOAD_FILE:
                         Path filePath = ServerCloud.getCloudRootPath().resolve(getFilePath(tmpBuf));
 
@@ -106,7 +102,6 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
                         }
 
                         break;
-                    // Processing a client's file upload request
                     case RECEIVE_UPLOAD_FILE_DESCRIPTION:
                         serverCloud.setActionFile(getUploadFileDescription());
 
@@ -123,12 +118,11 @@ public class ServerMainHandler extends ChannelInboundHandlerAdapter {
                         serverCloud.setActionFile(null);
 
                         sendMsg(ctx, getReceiveUploadFileEndMsg());
-                        // Extract current root directory
+
                         currDirectory = serverCloud.getCurrentRoot();
-                        // Got a list of files contained in this path
                         directoryTreeStructure = serverCloud.changeCurrentDirectoryTreeStructure(currDirectory)
                                 .getCurrentDirectoryTreeStructure();
-                        // Generated a byte array with a response
+
                         ByteBuf updateDirStructureBeforeUploadFileMsg = getMsgBytesFromFilesList(directoryTreeStructure,
                                 Command.REQUEST_CLOUD_TREE_STRUCTURE);
                         sendMsg(ctx, updateDirStructureBeforeUploadFileMsg);

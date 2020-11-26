@@ -41,7 +41,6 @@ public enum Command {
         return Command.class.getEnumConstants().length;
     }
 
-
     @Override
     public String toString() {
         return String.valueOf(value);
